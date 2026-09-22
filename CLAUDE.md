@@ -11,7 +11,10 @@ whether a "dividend capture" strategy (buy before ex-dividend, collect the
 payout, sell after) can be timed to net a gain using a GARCH-filtered
 regime-bootstrap Markov-chain Monte Carlo model of historical daily price
 movements, with an explicit ex-dividend calendar-drift term and multi-event
-backtesting (see session 3 in `logs/`). See
+backtesting (see session 3 in `logs/`). The generated dashboard
+(`interface/index.html`) also includes a plain-language usage guide and a
+"Quick picks" table classifying each stock as a Conservative/Aggressive/
+Balanced/Not-recommended pick (session 4). See
 [docs/system_architecture.md](docs/system_architecture.md) for the full
 pipeline and [AI_Performance_Report.md](AI_Performance_Report.md) for an
 honest assessment of where the model does and doesn't work.
@@ -53,6 +56,14 @@ honest assessment of where the model does and doesn't work.
   15/40-day entry/exit window without re-checking for the
   neighboring-event contamination described in
   `docs/system_architecture.md` §3 and `AI_Performance_Report.md`.
+- **The "Conservative pick" / "Aggressive pick" labels (`classify_suitability`
+  in `analysis_engine.py`) are deliberately independent of the model toggle**
+  (conservative/recent) — they answer "which stock suits my risk tolerance,"
+  a different question from "which calculation method did the computer use."
+  Both concepts use the word "conservative" for different things; the
+  interface's guide panel explains the distinction explicitly (session 4) —
+  don't remove that explanation if editing the guide, and don't make the
+  suitability label change when the model toggle is switched.
 
 ## Running it
 
@@ -102,8 +113,9 @@ dividend-capture-analysis/
 ├── CLAUDE.md                    # this file
 ├── requirements.txt
 ├── .venv/                       # local virtualenv (not committed)
+├── .git/                        # this project's own repo — github.com/ElroyQQ/dividend-capture-analysis
 ├── logs/
-│   └── session_01.md            # what happened in each build session
+│   └── session_0N.md            # what happened in each build session (currently 01–05)
 ├── docs/
 │   └── system_architecture.md   # pipeline + methodology detail
 ├── src/
@@ -123,3 +135,13 @@ Before starting new work in this project in a future session, read the most
 recent file in `logs/` first — it records what was built, what broke, and
 any modeling decisions made along the way, so you don't have to re-derive
 them from the code.
+
+## Repo status
+
+This project is **its own git repository** (`github.com/ElroyQQ/dividend-capture-analysis`,
+public), separate from the parent `Claude projects/` workspace's repo —
+it was originally built untracked inside that outer repo (sessions 1–4),
+then given its own history and pushed in session 5. The parent workspace's
+`.gitignore` excludes this folder so it's never accidentally tracked from
+there; always run `git` commands for this project from inside this folder,
+not from the parent. See `logs/session_05.md` for how/why.
