@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dividend Capture — Ranked Interface</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --page:           #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --muted:          #898781;
+    --gridline:       #e1e0d9;
+    --border:         rgba(11,11,11,0.10);
+    --accent:         #2a78d6;
+    --accent-wash:    #eaf2fc;
+    --good:           #0ca30c;
+    --warning:        #fab219;
+    --serious:        #ec835a;
+    --critical:       #d03b3b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --surface-1:      #1a1a19;
+      --page:           #0d0d0d;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --muted:          #898781;
+      --gridline:       #2c2c2a;
+      --border:         rgba(255,255,255,0.10);
+      --accent:         #3987e5;
+      --accent-wash:    #16283d;
+      --good:           #0ca30c;
+      --warning:        #fab219;
+      --serious:        #ec835a;
+      --critical:       #e66767;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 980px; margin: 0 auto; padding: 24px 16px 64px; }
+
+  header h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  header .sub { color: var(--text-secondary); font-size: 0.9rem; margin: 0 0 16px; }
+  .disclaimer {
+    background: var(--accent-wash);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+  }
+  .disclaimer strong { color: var(--text-primary); }
+
+  .guide-panel {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 4px 16px;
+    margin-bottom: 20px;
+  }
+  .guide-panel summary {
+    cursor: pointer;
+    list-style: none;
+    padding: 12px 0;
+    font-weight: 600;
+    font-size: 0.92rem;
+  }
+  .guide-panel summary::-webkit-details-marker { display: none; }
+  .guide-body { padding-bottom: 14px; font-size: 0.86rem; color: var(--text-secondary); }
+  .guide-body > p { margin: 0 0 14px; }
+  .guide-terms { margin: 0 0 14px; }
+  .guide-terms dt { color: var(--text-primary); font-weight: 600; margin-top: 12px; font-size: 0.88rem; }
+  .guide-terms dt:first-child { margin-top: 0; }
+  .guide-terms dd { margin: 3px 0 0; }
+  .guide-footer-note { font-style: italic; font-size: 0.8rem; margin: 0; }
+
+  .quickpick-category { color: var(--muted); font-size: 0.76rem; margin-top: 1px; }
+  .quickpick-reason { color: var(--text-secondary); font-size: 0.76rem; margin-top: 3px; max-width: 320px; }
+
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .segmented {
+    display: inline-flex;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .segmented button {
+    border: none;
+    background: var(--surface-1);
+    color: var(--text-secondary);
+    padding: 7px 12px;
+    font-size: 0.82rem;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .segmented button + button { border-left: 1px solid var(--border); }
+  .segmented button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+
+  section { margin-bottom: 32px; }
+  section > h2 { font-size: 1.05rem; margin: 0 0 4px; }
+  section > .section-sub { color: var(--text-secondary); font-size: 0.82rem; margin: 0 0 14px; }
+
+  #cardsView { display: flex; flex-direction: column; gap: 10px; }
+  .card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+  }
+  .card-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .rank-badge {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--accent); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.78rem; font-weight: 600; flex-shrink: 0;
+  }
+  .card-top .ticker { font-weight: 700; font-size: 1.05rem; }
+  .card-top .category { color: var(--text-secondary); font-size: 0.8rem; }
+  .status-pill {
+    margin-left: auto;
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 0.78rem; font-weight: 600;
+    padding: 3px 9px; border-radius: 999px;
+    border: 1px solid var(--border);
+  }
+  .status-pill .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-top: 12px;
+  }
+  .kpi { }
+  .kpi .label { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: .03em; }
+  .kpi .value { font-size: 0.95rem; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .kpi .value small { color: var(--text-secondary); font-weight: 400; font-size: 0.78rem; }
+
+  .card details { margin-top: 12px; }
+  .card summary {
+    cursor: pointer; font-size: 0.82rem; color: var(--accent);
+    list-style: none;
+  }
+  .card summary::-webkit-details-marker { display: none; }
+  .card summary::before { content: "▸ "; }
+  .card details[open] summary::before { content: "▾ "; }
+  .card details img { width: 100%; border-radius: 8px; margin-top: 8px; border: 1px solid var(--border); }
+  .not-recovered-note {
+    margin-top: 10px; font-size: 0.78rem; color: var(--serious);
+    background: color-mix(in srgb, var(--serious) 12%, transparent);
+    border-radius: 6px; padding: 6px 8px;
+  }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  table th, table td {
+    text-align: left; padding: 8px 10px;
+    border-bottom: 1px solid var(--gridline);
+    font-variant-numeric: tabular-nums;
+  }
+  table th { color: var(--muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: .03em; }
+  #tableView { display: none; overflow-x: auto; background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 4px 12px; }
+
+  .calc-panel {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px;
+  }
+  .calc-inputs { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 16px; }
+  .field { flex: 1; min-width: 180px; }
+  .field label { display: block; font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 5px; }
+  .field input, .field select {
+    width: 100%; padding: 9px 10px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--page);
+    color: var(--text-primary); font-size: 0.95rem; font-family: inherit;
+  }
+  .calc-results { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .stat-tile {
+    background: var(--page); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 14px;
+  }
+  .stat-tile .label { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: .03em; }
+  .stat-tile .value { font-size: 1.4rem; font-weight: 600; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .stat-tile .hint { color: var(--text-secondary); font-size: 0.78rem; margin-top: 3px; }
+  .calc-warning {
+    grid-column: 1 / -1;
+    font-size: 0.82rem; color: var(--serious);
+    background: color-mix(in srgb, var(--serious) 12%, transparent);
+    border-radius: 8px; padding: 8px 10px;
+  }
+
+  footer { color: var(--muted); font-size: 0.78rem; border-top: 1px solid var(--gridline); padding-top: 14px; }
+  footer a { color: var(--accent); }
+
+  @media (max-width: 640px) {
+    .kpi-row { grid-template-columns: repeat(2, 1fr); }
+    .calc-results { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Dividend Capture — Ranked Interface</h1>
+    <p class="sub">Generated __GENERATED_AT__ · __POST_WINDOW__-day post-dividend search window · 100,000-path Monte Carlo per model</p>
+    <div class="disclaimer">
+      <strong>Research tool, not investment advice.</strong> Rankings and estimated returns come from a
+      GARCH-filtered Markov simulation backtested across each stock's recent ex-dividend events, not a
+      prediction of future performance. It can model a stock's own historical calendar pattern around its
+      dividend date, but it cannot predict a one-off news- or macro-driven price move — see the TTE example
+      in <code>AI_Performance_Report.md</code>, which the "hit rate" and "± std dev" figures below are meant
+      to keep visible rather than hidden behind a single confident-looking number.
+    </div>
+  </header>
+
+  <details class="guide-panel" open>
+    <summary>📖 New here? Read this first — what everything on this page means</summary>
+    <div class="guide-body">
+      <p><strong>What this page does:</strong> dividend-capture is a strategy where you buy a stock shortly
+      before it pays a dividend, collect the payout, then sell. The catch is that stock prices usually drop
+      by about the dividend amount the moment it's paid — so the trick is timing your buy and sell so the
+      price has room to recover before/after that drop. This page ran a computer simulation on each stock's
+      real price history to estimate good timing, and checked how well that timing would actually have
+      worked across that stock's past dividend payouts (not just one, several — see "hit rate" below).</p>
+
+      <dl class="guide-terms">
+        <dt>Buy — "N days before ex-div"</dt>
+        <dd>The estimated best day to purchase, counted backward from the dividend date. "3 days before"
+        means: if the dividend date is a Friday, buy on the preceding Tuesday.</dd>
+
+        <dt>Sell — "N days after ex-div"</dt>
+        <dd>The estimated day the price should have recovered enough (price gain + dividend received) to
+        come out ahead, counted forward from the dividend date. "No recovery within __POST_WINDOW__d" means
+        the simulation didn't find a breakeven point within __POST_WINDOW__ trading days — a red flag, not a
+        typo.</dd>
+
+        <dt>Hit rate</dt>
+        <dd>Of this stock's last several dividend payouts, what fraction actually recovered in time when we
+        replay the same buy/sell rule on each one. <strong>100% is rare and not a guarantee</strong> — it
+        means "N for N last time," not "will always work."</dd>
+
+        <dt>Return per cycle (avg ± std dev)</dt>
+        <dd>The average profit or loss (as a % of what you put in) across those past cycles, and how much
+        that result actually varied between them. A <strong>small ± number</strong> means the outcome was
+        fairly consistent each time; a <strong>large ± number</strong> means it sometimes did much better or
+        much worse than the average — treat the average as a rough middle, not a promise.</dd>
+
+        <dt>Risk-reward score</dt>
+        <dd>One number combining average return, hit rate, and how many days your money is tied up — used
+        only to rank stocks against each other. Higher is better; the number alone means nothing outside
+        this comparison.</dd>
+
+        <dt>"Long-history model" vs "Recent-movement model" (buttons above)</dt>
+        <dd>Two ways the computer estimated future prices: one leans on this stock's <em>entire</em> price
+        history for a steadier, less reactive estimate; the other leans only on the <em>last year or so</em>,
+        so it reacts faster to recent momentum but can be noisier. Neither is "correct" — compare both if a
+        stock's numbers look very different between them, that's a sign the estimate is less certain.</dd>
+
+        <dt>"Conservative pick" / "Aggressive pick" / "Balanced" / "Not recommended" (Quick picks table below)</dt>
+        <dd>Not the same thing as the model buttons above — this is about <em>your</em> risk appetite, not
+        the computer's math. <strong>Conservative pick</strong> = historically the most reliable, smaller
+        swings. <strong>Aggressive pick</strong> = historically the biggest average payoff, but less
+        consistent. <strong>Balanced</strong> = middling on both. <strong>Not recommended</strong> = weak
+        track record on reliability, average return, or both.</dd>
+
+        <dt>Earnings calculator</dt>
+        <dd>Type in how much you'd deposit and pick a stock to see the dollar version of the numbers above —
+        shares bought, dividend received, estimated gain/loss, and (importantly) the historical ± range next
+        to it, so a single dollar figure doesn't look more certain than it is.</dd>
+      </dl>
+
+      <p class="guide-footer-note">This is a backtesting research tool, not financial advice — see the notice
+      above and <code>AI_Performance_Report.md</code> for where the model's estimates are weaker.</p>
+    </div>
+  </details>
+
+  <div class="controls">
+    <div class="segmented" role="group" aria-label="Model">
+      <button data-model="conservative" aria-pressed="true">Long-history model</button>
+      <button data-model="recent" aria-pressed="false">Recent-movement model</button>
+    </div>
+    <div class="segmented" role="group" aria-label="View">
+      <button data-view="cards" aria-pressed="true">Cards</button>
+      <button data-view="table" aria-pressed="false">Table</button>
+    </div>
+  </div>
+
+  <section>
+    <h2>Quick picks</h2>
+    <p class="section-sub">The short version — one line per stock. See "Ranked stocks" below for full detail and the simulation charts.</p>
+    <div class="card">
+      <table>
+        <thead>
+          <tr><th>Ticker</th><th>Best for</th><th>Buy</th><th>Sell</th><th>Typical result</th></tr>
+        </thead>
+        <tbody id="quickPicksBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Ranked stocks</h2>
+    <p class="section-sub">Ranked by risk-reward score (backtested mean return per cycle × hit rate ÷ average hold days, across each ticker's recent ex-dividend events). Buy/sell timing shown is for the most recent event only.</p>
+    <div id="cardsView"></div>
+    <div id="tableView">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th><th>Ticker</th><th>Category</th><th>Yield</th>
+            <th>Buy</th><th>Sell</th><th>Backtest N</th><th>Hit rate</th><th>Return/cycle (avg ± sd)</th><th>Score</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Earnings calculator</h2>
+    <p class="section-sub">Estimate for one buy → collect dividend → sell cycle, using the selected model's expected entry/exit prices.</p>
+    <div class="calc-panel">
+      <div class="calc-inputs">
+        <div class="field">
+          <label for="calcAmount">Amount deposited ($)</label>
+          <input type="number" id="calcAmount" min="0" step="100" value="1000">
+        </div>
+        <div class="field">
+          <label for="calcTicker">Stock</label>
+          <select id="calcTicker"></select>
+        </div>
+      </div>
+      <div class="calc-results" id="calcResults"></div>
+    </div>
+  </section>
+
+  <footer>
+    Full methodology: <a href="../docs/system_architecture.md">docs/system_architecture.md</a> ·
+    Model limitations: <a href="../AI_Performance_Report.md">AI_Performance_Report.md</a> ·
+    Raw ranking: <a href="../output/ranking.csv">output/ranking.csv</a>
+  </footer>
+</main>
+
+<script>
+const STOCKS = __STOCK_DATA__;
+let currentModel = "conservative";
+let currentView = "cards";
+
+const fmtUSD = n => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+const fmtPct = n => (n >= 0 ? "+" : "") + n.toFixed(2) + "%";
+
+function returnStatus(pct) {
+  if (pct >= 5) return { key: "good", label: "Strong", color: "var(--good)" };
+  if (pct >= 1) return { key: "warning", label: "Modest", color: "var(--warning)" };
+  if (pct >= 0) return { key: "serious", label: "Thin", color: "var(--serious)" };
+  return { key: "critical", label: "Negative", color: "var(--critical)" };
+}
+
+function suitabilityColor(label) {
+  return {
+    "Conservative pick": "var(--good)",
+    "Aggressive pick": "var(--warning)",
+    "Balanced": "var(--accent)",
+    "Not recommended": "var(--critical)",
+  }[label] || "var(--muted)";
+}
+
+function renderQuickPicks() {
+  document.getElementById("quickPicksBody").innerHTML = STOCKS.map(stock => {
+    const m = stock.models[currentModel];
+    const color = suitabilityColor(stock.suitability);
+    const sellText = m.sellDaysAfterEx === null ? `no recovery in __POST_WINDOW__d` : `${m.sellDaysAfterEx}d after ex-div`;
+    return `<tr>
+      <td><strong>${stock.ticker}</strong><div class="quickpick-category">${stock.category}</div></td>
+      <td>
+        <span class="status-pill" style="color:${color}; border-color:${color}"><span class="dot" style="background:${color}"></span>${stock.suitability}</span>
+        <div class="quickpick-reason">${stock.suitabilityReason}</div>
+      </td>
+      <td>${m.buyDaysBeforeEx}d before ex-div</td>
+      <td>${sellText}</td>
+      <td>${fmtPct(m.backtestMeanReturnPct)} avg ± ${m.backtestStdReturnPct.toFixed(1)}%</td>
+    </tr>`;
+  }).join("");
+}
+
+function cardHTML(stock) {
+  const m = stock.models[currentModel];
+  const status = returnStatus(m.backtestMeanReturnPct);
+  const sellText = m.sellDaysAfterEx === null
+    ? `no recovery within __POST_WINDOW__d`
+    : `${m.sellDaysAfterEx}d after ex-div, ~${fmtUSD(m.exitPrice)}`;
+  return `
+    <div class="card">
+      <div class="card-top">
+        <div class="rank-badge">${stock.rank}</div>
+        <div>
+          <div class="ticker">${stock.ticker} <span class="status-pill" style="color:${suitabilityColor(stock.suitability)}; border-color:${suitabilityColor(stock.suitability)}; font-size:0.7rem; padding:2px 7px; vertical-align:middle;">${stock.suitability}</span></div>
+          <div class="category">${stock.category}</div>
+        </div>
+        <div class="status-pill" style="color:${status.color}; border-color:${status.color}">
+          <span class="dot" style="background:${status.color}"></span>${status.label} · ${fmtPct(m.backtestMeanReturnPct)} avg
+        </div>
+      </div>
+      <div class="kpi-row">
+        <div class="kpi"><div class="label">Trailing yield</div><div class="value">${stock.trailingYieldPct.toFixed(2)}%</div></div>
+        <div class="kpi"><div class="label">Buy (most recent event)</div><div class="value">${m.buyDaysBeforeEx}d before ex-div <small>~${fmtUSD(m.entryPrice)}</small></div></div>
+        <div class="kpi"><div class="label">Sell (most recent event)</div><div class="value">${sellText}</div></div>
+        <div class="kpi"><div class="label">Risk-reward score</div><div class="value">${stock.riskRewardScore}</div></div>
+      </div>
+      <div class="kpi-row" style="margin-top:8px">
+        <div class="kpi"><div class="label">Backtest sample</div><div class="value">${m.backtestNEvents} past events</div></div>
+        <div class="kpi"><div class="label">Hit rate</div><div class="value">${m.backtestHitRatePct}% recovered</div></div>
+        <div class="kpi" style="grid-column: span 2"><div class="label">Return per cycle (backtested)</div><div class="value">${fmtPct(m.backtestMeanReturnPct)} <small>± ${m.backtestStdReturnPct.toFixed(2)}% (1 std dev)</small></div></div>
+      </div>
+      ${!m.recovered ? `<div class="not-recovered-note">Most recent event did not find a full recovery within __POST_WINDOW__ trading days under the ${currentModel} model — the "sell" figure above uses day __POST_WINDOW__'s expected price, not a true breakeven. The backtest hit-rate above already accounts for this across all sampled events.</div>` : ""}
+      <details>
+        <summary>Simulation chart (most recent event)</summary>
+        <img src="${stock.chart}" alt="${stock.ticker} simulated vs actual price around ex-dividend date" loading="lazy">
+      </details>
+    </div>`;
+}
+
+function renderCards() {
+  document.getElementById("cardsView").innerHTML = STOCKS.map(cardHTML).join("");
+}
+
+function renderTable() {
+  document.getElementById("tableBody").innerHTML = STOCKS.map(stock => {
+    const m = stock.models[currentModel];
+    const sellText = m.sellDaysAfterEx === null ? `>__POST_WINDOW__d` : `${m.sellDaysAfterEx}d after`;
+    return `<tr>
+      <td>${stock.rank}</td>
+      <td>${stock.ticker}</td>
+      <td>${stock.category}</td>
+      <td>${stock.trailingYieldPct.toFixed(2)}%</td>
+      <td>${m.buyDaysBeforeEx}d before</td>
+      <td>${sellText}</td>
+      <td>${m.backtestNEvents}</td>
+      <td>${m.backtestHitRatePct}%</td>
+      <td>${fmtPct(m.backtestMeanReturnPct)} ± ${m.backtestStdReturnPct.toFixed(2)}%</td>
+      <td>${stock.riskRewardScore}</td>
+    </tr>`;
+  }).join("");
+}
+
+function populateCalcSelect() {
+  const select = document.getElementById("calcTicker");
+  select.innerHTML = STOCKS.map(s => `<option value="${s.ticker}">${s.ticker} — ${s.category}</option>`).join("");
+}
+
+function updateCalculator() {
+  const amount = parseFloat(document.getElementById("calcAmount").value) || 0;
+  const ticker = document.getElementById("calcTicker").value;
+  const stock = STOCKS.find(s => s.ticker === ticker);
+  const m = stock.models[currentModel];
+
+  const shares = m.entryPrice > 0 ? amount / m.entryPrice : 0;
+  const dividendReceived = shares * stock.dividend;
+  const priceChange = (m.exitPrice - m.entryPrice) * shares;
+  const totalEarnings = dividendReceived + priceChange;
+  const endingValue = amount + totalEarnings;
+
+  const results = document.getElementById("calcResults");
+  results.innerHTML = `
+    <div class="stat-tile">
+      <div class="label">Shares purchased</div>
+      <div class="value">${shares.toFixed(3)}</div>
+      <div class="hint">at ~${fmtUSD(m.entryPrice)}/share</div>
+    </div>
+    <div class="stat-tile">
+      <div class="label">Dividend received</div>
+      <div class="value">${fmtUSD(dividendReceived)}</div>
+      <div class="hint">${fmtUSD(stock.dividend)}/share</div>
+    </div>
+    <div class="stat-tile">
+      <div class="label">Price gain/loss</div>
+      <div class="value" style="color:${priceChange >= 0 ? 'var(--good)' : 'var(--critical)'}">${fmtUSD(priceChange)}</div>
+      <div class="hint">~${fmtUSD(m.entryPrice)} → ~${fmtUSD(m.exitPrice)}</div>
+    </div>
+    <div class="stat-tile">
+      <div class="label">Total estimated earnings</div>
+      <div class="value" style="color:${totalEarnings >= 0 ? 'var(--good)' : 'var(--critical)'}">${fmtUSD(totalEarnings)}</div>
+      <div class="hint">${fmtPct(m.netReturnPct)} over ${m.totalHoldDays} trading days</div>
+    </div>
+    <div class="stat-tile">
+      <div class="label">Estimated ending value</div>
+      <div class="value">${fmtUSD(endingValue)}</div>
+      <div class="hint">deposit + earnings</div>
+    </div>
+    <div class="stat-tile">
+      <div class="label">Holding period</div>
+      <div class="value">${m.totalHoldDays} days</div>
+      <div class="hint">${m.buyDaysBeforeEx}d before ex-div → ${m.sellDaysAfterEx === null ? '__POST_WINDOW__d' : m.sellDaysAfterEx + 'd'} after</div>
+    </div>
+    <div class="stat-tile" style="grid-column: 1 / -1; background:var(--accent-wash)">
+      <div class="label">This is one event, not a forecast</div>
+      <div class="value" style="font-size:1.05rem">Backtested across ${m.backtestNEvents} past cycles: ${fmtPct(m.backtestMeanReturnPct)} avg ± ${m.backtestStdReturnPct.toFixed(2)}%, ${m.backtestHitRatePct}% hit rate</div>
+      <div class="hint">The dollar figures above use this one most-recent event's expected prices. The range here is what actually happened across this ticker's other recent ex-dividend cycles — use it to judge how much the number above could be off by, not the number itself as a forecast.</div>
+    </div>
+    ${!m.recovered ? `<div class="calc-warning">The most recent event did not reach a full price recovery within the __POST_WINDOW__-day search window — the exit price used here is the model's expected price at day __POST_WINDOW__, not a confirmed breakeven. The backtest hit-rate above already reflects how often that happens historically.</div>` : ""}
+  `;
+}
+
+function renderAll() {
+  renderQuickPicks();
+  renderCards();
+  renderTable();
+  updateCalculator();
+}
+
+document.querySelectorAll('[data-model]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-model]').forEach(b => b.setAttribute('aria-pressed', 'false'));
+    btn.setAttribute('aria-pressed', 'true');
+    currentModel = btn.dataset.model;
+    renderAll();
+  });
+});
+
+document.querySelectorAll('[data-view]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-view]').forEach(b => b.setAttribute('aria-pressed', 'false'));
+    btn.setAttribute('aria-pressed', 'true');
+    currentView = btn.dataset.view;
+    document.getElementById('cardsView').style.display = currentView === 'cards' ? 'flex' : 'none';
+    document.getElementById('tableView').style.display = currentView === 'table' ? 'block' : 'none';
+  });
+});
+
+document.getElementById('calcAmount').addEventListener('input', updateCalculator);
+document.getElementById('calcTicker').addEventListener('change', updateCalculator);
+
+populateCalcSelect();
+renderAll();
+</script>
+</body>
+</html>
