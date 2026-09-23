@@ -72,6 +72,13 @@ honest assessment of where the model does and doesn't work.
   15/40-day entry/exit window without re-checking for the
   neighboring-event contamination described in
   `docs/system_architecture.md` §3 and `AI_Performance_Report.md`.
+- **The interface auto-reloads every 60s (`location.reload()`), which is
+  purely a page refresh, not a live data feed** (session 7). Don't let the
+  auto-refresh indicator's presence imply the page fetches anything itself
+  — new numbers only appear after `analysis_engine.py` has actually been
+  rerun. If a "live" data mode is ever built, that's a real architectural
+  change (see `docs/system_architecture.md`), not just wiring this
+  indicator up to something real.
 - **The "Conservative pick" / "Aggressive pick" labels (`classify_suitability`
   in `analysis_engine.py`) are deliberately independent of the model toggle**
   (conservative/recent) — they answer "which stock suits my risk tolerance,"
@@ -131,7 +138,7 @@ dividend-capture-analysis/
 ├── .venv/                       # local virtualenv (not committed)
 ├── .git/                        # this project's own repo — github.com/ElroyQQ/dividend-capture-analysis
 ├── logs/
-│   └── session_0N.md            # what happened in each build session (currently 01–06)
+│   └── session_0N.md            # what happened in each build session (currently 01–07)
 ├── docs/
 │   └── system_architecture.md   # pipeline + methodology detail
 ├── src/

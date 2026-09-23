@@ -52,6 +52,22 @@
 
   header h1 { font-size: 1.5rem; margin: 0 0 4px; }
   header .sub { color: var(--text-secondary); font-size: 0.9rem; margin: 0 0 16px; }
+  .refresh-indicator {
+    display: inline-flex; align-items: center; gap: 6px;
+    margin-left: 10px; padding: 2px 9px;
+    border: 1px solid var(--border); border-radius: 999px;
+    font-size: 0.78rem; color: var(--text-secondary);
+    cursor: default;
+  }
+  .refresh-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--good);
+    animation: refresh-pulse 2s ease-in-out infinite;
+  }
+  @keyframes refresh-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+  }
   .disclaimer {
     background: var(--accent-wash);
     border: 1px solid var(--border);
@@ -221,7 +237,12 @@
 <main>
   <header>
     <h1>Dividend Capture — Ranked Interface</h1>
-    <p class="sub">Generated __GENERATED_AT__ · __POST_WINDOW__-day post-dividend search window · 100,000-path Monte Carlo per model</p>
+    <p class="sub">
+      Generated __GENERATED_AT__ · __POST_WINDOW__-day post-dividend search window · 100,000-path Monte Carlo per model
+      <span class="refresh-indicator" id="refreshIndicator" title="Reloads this page from disk every 60s — only shows new numbers once the analysis has actually been rerun, see the guide below.">
+        <span class="refresh-dot"></span><span id="refreshText">Auto-refreshing in 60s</span>
+      </span>
+    </p>
     <div class="disclaimer">
       <strong>Research tool, not investment advice.</strong> Rankings and estimated returns come from a
       GARCH-filtered Markov simulation backtested across each stock's recent ex-dividend events, not a
@@ -291,6 +312,13 @@
         <dd>Type in how much you'd deposit and pick a stock to see the dollar version of the numbers above —
         shares bought, dividend received, estimated gain/loss, and (importantly) the historical ± range next
         to it, so a single dollar figure doesn't look more certain than it is.</dd>
+
+        <dt>"Auto-refreshing in 60s" (top right of the header)</dt>
+        <dd>This page reloads itself from disk every 60 seconds — it does <strong>not</strong> fetch live
+        market data or re-run the analysis by itself. The numbers only change after the next reload if
+        something else (rerunning <code>analysis_engine.py</code>, by hand or on a schedule) has actually
+        regenerated this file in the meantime. Check the "Generated" timestamp at the top — if it hasn't
+        moved, you're looking at the same snapshot, just re-loaded.</dd>
       </dl>
 
       <p class="guide-footer-note">This is a backtesting research tool, not financial advice — see the notice
@@ -319,6 +347,14 @@
         </thead>
         <tbody id="quickPicksBody"></tbody>
       </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Compare all stocks</h2>
+    <p class="section-sub">Each stock's actual price around its ex-dividend date, indexed to 100 on that day, overlaid on one chart — so you can compare how volatile and how quick-to-recover each one has actually been, at a glance. Real historical prices, not simulated.</p>
+    <div class="card">
+      <img src="../output/comparison_paths.png" alt="Normalized price comparison across all tickers" style="width:100%; border-radius:8px;" loading="lazy">
     </div>
   </section>
 
@@ -555,6 +591,23 @@ document.getElementById('calcTicker').addEventListener('change', updateCalculato
 
 populateCalcSelect();
 renderAll();
+
+// Reloads this static page from disk every 60s. This does NOT re-run the
+// analysis or fetch live market data by itself — it only shows new numbers
+// if something else (rerunning analysis_engine.py, e.g. by hand or on a
+// schedule) has regenerated this file in the meantime. See the guide above.
+const REFRESH_SECONDS = 60;
+let secondsUntilRefresh = REFRESH_SECONDS;
+setInterval(() => {
+  secondsUntilRefresh--;
+  const el = document.getElementById("refreshText");
+  if (secondsUntilRefresh <= 0) {
+    if (el) el.textContent = "Refreshing…";
+    location.reload();
+  } else if (el) {
+    el.textContent = `Auto-refreshing in ${secondsUntilRefresh}s`;
+  }
+}, 1000);
 </script>
 </body>
 </html>

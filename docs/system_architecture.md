@@ -253,6 +253,26 @@ A companion `## Quick picks` table (ticker → best-for label → one-line
 reason) is written into `output/report.md` from the same function, so the
 CSV/report/interface all agree.
 
+**`plot_comparison_chart()` / `output/comparison_paths.png`** (session 7):
+overlays every ticker's *actual* (not simulated) price around its headline
+ex-dividend date, indexed to 100 on that day, on one chart — lets a viewer
+compare volatility and recovery shape across tickers at a glance, which
+separate per-ticker charts (each with its own y-axis scale) don't support.
+Colors are the first four slots of the dataviz reference categorical
+palette in their validated fixed order; each line also gets a direct
+end-of-line label, since two of those four slots (aqua, yellow) don't
+clear 3:1 contrast on the chart's white background and shouldn't rely on
+a legend swatch alone.
+
+**Auto-refresh (session 7)**: the page reloads itself from disk every 60
+seconds, with a visible pulsing-dot countdown indicator in the header. This
+is a plain `location.reload()` — the page still doesn't fetch live data or
+re-run the analysis itself (it's a generated snapshot, per above); it only
+shows new numbers once something else has regenerated `interface/index.html`
+in the meantime. The guide panel explains this distinction explicitly, so
+the indicator doesn't imply more liveness than the architecture actually
+has.
+
 ## Known limitations (updated session 6)
 
 - **The calendar-drift term is a historical average, not a forecast of

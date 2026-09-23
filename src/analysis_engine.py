@@ -264,10 +264,19 @@ def analyze_ticker(ticker: str) -> dict:
         raise ValueError(f"{ticker}: the last 6 usable events all had degenerate fits — "
                           f"can't produce a headline chart/detail view.")
 
+    # Actual price around the headline event, indexed to 100 at the ex-div
+    # date — used by plot_comparison_chart() to overlay every ticker on one
+    # chart. Real (not simulated) prices, since the point is to compare
+    # actual historical volatility/recovery shape at a glance.
+    comparison_slice = history["Close"].iloc[headline_idx - PRE_WINDOW: headline_idx + POST_WINDOW]
+    comparison_x = list(range(-PRE_WINDOW, len(comparison_slice) - PRE_WINDOW))
+    comparison_y = (comparison_slice.values / ex_close * 100).tolist()
+
     result = {
         "ticker": ticker, "q_ratio": q_ratio, "trailing_yield": trailing_yield,
         "ex_date": headline_date, "dividend": dividend, "cum_close": cum_close,
         "headline": headline, "backtest": backtest_summary,
+        "comparison_series": {"x": comparison_x, "y": comparison_y},
     }
     plot_paths(ticker, history, headline_idx, result)
     return result
@@ -300,6 +309,42 @@ def plot_paths(ticker: str, history: pd.DataFrame, ex_idx: int, result: dict) ->
     ax.legend(fontsize=8)
     fig.tight_layout()
     fig.savefig(OUTPUT / f"{ticker}_paths.png", dpi=140)
+    plt.close(fig)
+
+
+# First 4 slots of the dataviz reference categorical palette (light-mode hexes;
+# this chart is a static PNG, always rendered on a white matplotlib background
+# regardless of the interface page's own light/dark theme), in the fixed order
+# the palette validates for CVD-safety on adjacent pairs.
+COMPARISON_COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100"]  # blue, orange, aqua, yellow
+
+
+def plot_comparison_chart(results: list[dict]) -> None:
+    """Overlay every ticker's actual price around its headline ex-dividend
+    event, indexed to 100 at the ex-div date, on one chart — lets a viewer
+    compare volatility/recovery shape across tickers at a glance, which a
+    separate chart per ticker (with its own y-axis scale) doesn't support."""
+    fig, ax = plt.subplots(figsize=(9, 5.5))
+    for i, r in enumerate(results):
+        cs = r["comparison_series"]
+        color = COMPARISON_COLORS[i % len(COMPARISON_COLORS)]
+        ax.plot(cs["x"], cs["y"], color=color, lw=2, label=r["ticker"])
+        # Direct end-of-line label — the dataviz palette's yellow/aqua slots
+        # don't clear 3:1 contrast on a white background, so a label next to
+        # the line (not just a legend swatch) keeps the series identifiable
+        # rather than relying on color alone.
+        ax.annotate(r["ticker"], (cs["x"][-1], cs["y"][-1]), color=color,
+                     fontsize=9, fontweight="bold", xytext=(6, 0),
+                     textcoords="offset points", va="center")
+
+    ax.axvline(0, color="gray", lw=1, ls=":")
+    ax.axhline(100, color="gray", lw=1, ls=":")
+    ax.set_title("Actual price around each ticker's headline ex-dividend date, indexed to 100")
+    ax.set_xlabel("Trading days relative to ex-dividend date")
+    ax.set_ylabel("Price (indexed, ex-div day = 100)")
+    ax.legend(fontsize=8, loc="upper left")
+    fig.tight_layout()
+    fig.savefig(OUTPUT / "comparison_paths.png", dpi=140)
     plt.close(fig)
 
 
@@ -466,6 +511,7 @@ def main() -> None:
     for ticker in TICKERS:
         print(f"Analyzing {ticker}...")
         results.append(analyze_ticker(ticker))
+    plot_comparison_chart(results)
     df = rank(results)
     df.to_csv(OUTPUT / "ranking.csv", index=False)
     suitability = classify_suitability(df)
