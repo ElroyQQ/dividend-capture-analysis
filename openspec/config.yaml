@@ -1,0 +1,24 @@
+schema: spec-driven
+
+context: |
+  Architecture method: FRAMEWORK.md (Dat / Trn / Loc / Trm + §4.5 coherence laws).
+  Every claim must name its object, morphism, location or transmission and map to a
+  real file:symbol, a planned item, or an explicit open question. Never invent
+  architecture that cannot be grounded.
+
+  Session log convention: this project uses logs/session_0N.md (documented in
+  CLAUDE.md), not docs/sessions/ — write session notes there, not a parallel location.
+
+rules:
+  design:
+    - State the model delta as objects and morphisms with signature, partiality, semantics
+    - Run the §3 Consolidation check — is this a new object, or an existing object plus morphisms?
+    - Name the §4.5 coherence laws the change must keep satisfied
+    - Isolate effects behind ports; deduce rather than store; one source of truth for shared structure
+  specs:
+    - Observable, consumer-facing behaviour only — no internal class or function names
+    - Every requirement carries at least one happy-path and one failure Scenario
+  tasks:
+    - Every new or changed morphism gets a row in docs/<component>/IMPLEMENTATION.md with its file:symbol
+    - Reconcile ARCHITECTURE.md, IMPLEMENTATION.md and STATUS.md before archiving
+    - Run the supercharge drift check and fix dead rows before archiving
