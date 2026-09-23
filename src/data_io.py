@@ -15,6 +15,12 @@ def fetch_history(ticker: str, period: str = "5y") -> pd.DataFrame:
     if df.empty:
         raise ValueError(f"No data returned for {ticker!r} — check the symbol.")
     df.index = df.index.tz_localize(None)
+    # yfinance sometimes appends a row for the most recent session before it has
+    # fully finalized (NaN Close) — drop it rather than let NaN propagate into
+    # every downstream calculation that assumes the last row is a real price.
+    df = df[df["Close"].notna()]
+    if df.empty:
+        raise ValueError(f"{ticker!r}: all rows had a NaN Close after filtering.")
     return df
 
 

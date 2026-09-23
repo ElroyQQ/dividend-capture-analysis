@@ -8,10 +8,12 @@ calls `Claude.md`.)
 
 A **research/backtesting prototype**, not a live trading system. It tests
 whether a "dividend capture" strategy (buy before ex-dividend, collect the
-payout, sell after) can be timed to net a gain using a GARCH-filtered
+payout, sell after) can be timed to net a gain using an EGARCH-filtered
 regime-bootstrap Markov-chain Monte Carlo model of historical daily price
-movements, with an explicit ex-dividend calendar-drift term and multi-event
-backtesting (see session 3 in `logs/`). The generated dashboard
+movements (session 6 upgraded GARCH→EGARCH for the equity "leverage
+effect"), with an explicit ex-dividend calendar-drift term and multi-event
+backtesting reported with Wilson confidence intervals, not bare percentages
+(session 3, extended session 6). The generated dashboard
 (`interface/index.html`) also includes a plain-language usage guide and a
 "Quick picks" table classifying each stock as a Conservative/Aggressive/
 Balanced/Not-recommended pick (session 4). See
@@ -44,12 +46,26 @@ honest assessment of where the model does and doesn't work.
   remove the backtest context when touching the calculator; the dollar
   figures alone were flagged in session 2 as easy to mistake for a
   forecast.
-- **GARCH's mean equation is fixed at zero** (`mean="Zero"` in
+- **EGARCH's mean equation is fixed at zero** (`mean="Zero"` in
   `markov.fit_model`) — deliberate, so the volatility model doesn't get
   conflated with a noisy naive drift estimate. Any directional signal in
   the simulation comes only from regime persistence and the explicit
-  calendar-drift term. Don't add a nonzero GARCH mean without updating
+  calendar-drift term. Don't add a nonzero mean without updating
   `docs/system_architecture.md`'s "Known limitations" section to match.
+- **A degenerate EGARCH fit is a real, observed failure mode, not a
+  hypothetical** (session 6 — see `AI_Performance_Report.md` for the full
+  trail). `markov._is_degenerate()` rejects `|alpha|>20`, `|gamma|>20`, or
+  `|beta|>=1`; `fit_model()` retries once with a Normal distribution and
+  otherwise raises `DegenerateFitError`, which `analysis_engine.py` catches
+  to skip that one historical event. Don't remove this check or widen its
+  thresholds without re-verifying against the specific case documented
+  there (`ν≈2` Student-t fit → `alpha=748.7`) — the optimizer's own
+  `convergence_flag` does **not** catch this.
+- **The standardized-residual bootstrap pool is clipped to ±10, and the
+  log-variance recursion to ±4 around a data-grounded center** — both are
+  load-bearing numerical safety nets (session 6), not arbitrary constants.
+  Loosening either without re-running the degenerate-fit case in
+  `AI_Performance_Report.md` risks reintroducing `inf`/`nan` output.
 - **The calendar-drift window is capped per ticker** to at most half its
   median trading-day gap between ex-dividend events — this was a real bug
   fix (session 3), not a stylistic choice. Don't widen it back to the full
@@ -78,9 +94,9 @@ below).
 
 To change the ticker set, edit the `TICKERS` dict at the top of
 `src/analysis_engine.py`. Full run (4 tickers, both models, headline +
-8-event backtest each) takes well under 10 seconds on this machine —
-GARCH fits and vectorized Monte Carlo are both cheap; if it's ever slow,
-suspect a `yfinance` network stall, not the modeling code.
+up to 50-event backtest each) takes well under 20 seconds on this
+machine — EGARCH fits and vectorized Monte Carlo are both cheap; if it's
+ever slow, suspect a `yfinance` network stall, not the modeling code.
 
 Dependencies (`requirements.txt`) include `arch` for GARCH modeling —
 installing it pulls in `scipy`/`statsmodels`, which on a slow connection
@@ -115,7 +131,7 @@ dividend-capture-analysis/
 ├── .venv/                       # local virtualenv (not committed)
 ├── .git/                        # this project's own repo — github.com/ElroyQQ/dividend-capture-analysis
 ├── logs/
-│   └── session_0N.md            # what happened in each build session (currently 01–05)
+│   └── session_0N.md            # what happened in each build session (currently 01–06)
 ├── docs/
 │   └── system_architecture.md   # pipeline + methodology detail
 ├── src/

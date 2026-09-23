@@ -1,5 +1,5 @@
-ticker,category,trailing_yield_pct,median_Q_ratio,n_backtest_events,hit_rate_pct,mean_return_per_cycle_pct,std_return_per_cycle_pct,median_recovery_days,risk_reward_score
-AGNC,hold — monthly-paying mortgage REIT,14.44,0.71,8,87.5,4.136,4.725,1.0,0.5909
-TTE,"trade_exit — energy major, quarterly dividend",3.29,0.87,8,100.0,4.313,7.298,1.0,0.5309
-O,hold — monthly-paying REIT (Realty Income),5.73,1.4,8,75.0,2.182,3.777,1.0,0.1149
-STAG,hold — monthly-paying industrial REIT,3.39,-0.69,8,50.0,1.245,5.235,1.0,0.0242
+ticker,category,trailing_yield_pct,median_Q_ratio,n_backtest_events,hit_rate_pct,hit_rate_95ci,mean_return_per_cycle_pct,std_return_per_cycle_pct,median_recovery_days,risk_reward_score
+AGNC,hold — monthly-paying mortgage REIT,14.44,0.71,39,89.7,76–96%,2.309,6.403,1.0,0.222
+TTE,"trade_exit — energy major, quarterly dividend",3.29,0.87,13,100.0,77–100%,3.643,6.57,1.0,0.1685
+STAG,hold — monthly-paying industrial REIT,3.39,-0.69,34,85.3,70–94%,1.961,5.402,1.0,0.1076
+O,hold — monthly-paying REIT (Realty Income),5.73,1.4,42,76.2,61–87%,1.468,4.161,1.0,0.0587

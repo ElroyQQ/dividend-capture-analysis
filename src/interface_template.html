@@ -253,10 +253,13 @@
         the simulation didn't find a breakeven point within __POST_WINDOW__ trading days — a red flag, not a
         typo.</dd>
 
-        <dt>Hit rate</dt>
+        <dt>Hit rate (with a confidence range)</dt>
         <dd>Of this stock's last several dividend payouts, what fraction actually recovered in time when we
         replay the same buy/sell rule on each one. <strong>100% is rare and not a guarantee</strong> — it
-        means "N for N last time," not "will always work."</dd>
+        means "N for N last time," not "will always work." The range in brackets (e.g. "90% [76–96%]") is a
+        statistical confidence interval: with a small number of past events, the <em>true</em> underlying
+        rate could plausibly be anywhere in that range — a narrow range means the number is well-supported,
+        a wide one means treat the headline percentage with real caution.</dd>
 
         <dt>Return per cycle (avg ± std dev)</dt>
         <dd>The average profit or loss (as a % of what you put in) across those past cycles, and how much
@@ -265,9 +268,11 @@
         much worse than the average — treat the average as a rough middle, not a promise.</dd>
 
         <dt>Risk-reward score</dt>
-        <dd>One number combining average return, hit rate, and how many days your money is tied up — used
-        only to rank stocks against each other. Higher is better; the number alone means nothing outside
-        this comparison.</dd>
+        <dd>One number combining average return, how many days your money is tied up, and hit rate — but
+        using the <em>low end</em> of the hit rate's confidence range, not the headline percentage, so a
+        stock that looks great only because it's had very few events doesn't automatically outrank one with
+        a slightly lower but much better-supported hit rate. Used only to rank stocks against each other;
+        higher is better, but the number alone means nothing outside this comparison.</dd>
 
         <dt>"Long-history model" vs "Recent-movement model" (buttons above)</dt>
         <dd>Two ways the computer estimated future prices: one leans on this stock's <em>entire</em> price
@@ -319,14 +324,14 @@
 
   <section>
     <h2>Ranked stocks</h2>
-    <p class="section-sub">Ranked by risk-reward score (backtested mean return per cycle × hit rate ÷ average hold days, across each ticker's recent ex-dividend events). Buy/sell timing shown is for the most recent event only.</p>
+    <p class="section-sub">Ranked by risk-reward score (backtested mean return per cycle × confidence-adjusted hit rate ÷ average hold days, across each ticker's recent ex-dividend events — see the guide above for what "confidence-adjusted" means). Buy/sell timing shown is for the most recent event only.</p>
     <div id="cardsView"></div>
     <div id="tableView">
       <table>
         <thead>
           <tr>
             <th>#</th><th>Ticker</th><th>Category</th><th>Yield</th>
-            <th>Buy</th><th>Sell</th><th>Backtest N</th><th>Hit rate</th><th>Return/cycle (avg ± sd)</th><th>Score</th>
+            <th>Buy</th><th>Sell</th><th>Backtest N</th><th>Hit rate [95% CI]</th><th>Return/cycle (avg ± sd)</th><th>Score</th>
           </tr>
         </thead>
         <tbody id="tableBody"></tbody>
@@ -427,7 +432,7 @@ function cardHTML(stock) {
       </div>
       <div class="kpi-row" style="margin-top:8px">
         <div class="kpi"><div class="label">Backtest sample</div><div class="value">${m.backtestNEvents} past events</div></div>
-        <div class="kpi"><div class="label">Hit rate</div><div class="value">${m.backtestHitRatePct}% recovered</div></div>
+        <div class="kpi"><div class="label">Hit rate</div><div class="value">${m.backtestHitRatePct}% recovered <small>[${m.backtestHitRateCiLoPct}–${m.backtestHitRateCiHiPct}%]</small></div></div>
         <div class="kpi" style="grid-column: span 2"><div class="label">Return per cycle (backtested)</div><div class="value">${fmtPct(m.backtestMeanReturnPct)} <small>± ${m.backtestStdReturnPct.toFixed(2)}% (1 std dev)</small></div></div>
       </div>
       ${!m.recovered ? `<div class="not-recovered-note">Most recent event did not find a full recovery within __POST_WINDOW__ trading days under the ${currentModel} model — the "sell" figure above uses day __POST_WINDOW__'s expected price, not a true breakeven. The backtest hit-rate above already accounts for this across all sampled events.</div>` : ""}
@@ -454,7 +459,7 @@ function renderTable() {
       <td>${m.buyDaysBeforeEx}d before</td>
       <td>${sellText}</td>
       <td>${m.backtestNEvents}</td>
-      <td>${m.backtestHitRatePct}%</td>
+      <td>${m.backtestHitRatePct}% [${m.backtestHitRateCiLoPct}–${m.backtestHitRateCiHiPct}%]</td>
       <td>${fmtPct(m.backtestMeanReturnPct)} ± ${m.backtestStdReturnPct.toFixed(2)}%</td>
       <td>${stock.riskRewardScore}</td>
     </tr>`;
@@ -512,7 +517,7 @@ function updateCalculator() {
     </div>
     <div class="stat-tile" style="grid-column: 1 / -1; background:var(--accent-wash)">
       <div class="label">This is one event, not a forecast</div>
-      <div class="value" style="font-size:1.05rem">Backtested across ${m.backtestNEvents} past cycles: ${fmtPct(m.backtestMeanReturnPct)} avg ± ${m.backtestStdReturnPct.toFixed(2)}%, ${m.backtestHitRatePct}% hit rate</div>
+      <div class="value" style="font-size:1.05rem">Backtested across ${m.backtestNEvents} past cycles: ${fmtPct(m.backtestMeanReturnPct)} avg ± ${m.backtestStdReturnPct.toFixed(2)}%, ${m.backtestHitRatePct}% hit rate [${m.backtestHitRateCiLoPct}–${m.backtestHitRateCiHiPct}%]</div>
       <div class="hint">The dollar figures above use this one most-recent event's expected prices. The range here is what actually happened across this ticker's other recent ex-dividend cycles — use it to judge how much the number above could be off by, not the number itself as a forecast.</div>
     </div>
     ${!m.recovered ? `<div class="calc-warning">The most recent event did not reach a full price recovery within the __POST_WINDOW__-day search window — the exit price used here is the model's expected price at day __POST_WINDOW__, not a confirmed breakeven. The backtest hit-rate above already reflects how often that happens historically.</div>` : ""}

@@ -221,7 +221,7 @@
 <main>
   <header>
     <h1>Dividend Capture — Ranked Interface</h1>
-    <p class="sub">Generated 2026-09-22 15:30 · 40-day post-dividend search window · 100,000-path Monte Carlo per model</p>
+    <p class="sub">Generated 2026-09-23 09:44 · 40-day post-dividend search window · 100,000-path Monte Carlo per model</p>
     <div class="disclaimer">
       <strong>Research tool, not investment advice.</strong> Rankings and estimated returns come from a
       GARCH-filtered Markov simulation backtested across each stock's recent ex-dividend events, not a
@@ -253,10 +253,13 @@
         the simulation didn't find a breakeven point within 40 trading days — a red flag, not a
         typo.</dd>
 
-        <dt>Hit rate</dt>
+        <dt>Hit rate (with a confidence range)</dt>
         <dd>Of this stock's last several dividend payouts, what fraction actually recovered in time when we
         replay the same buy/sell rule on each one. <strong>100% is rare and not a guarantee</strong> — it
-        means "N for N last time," not "will always work."</dd>
+        means "N for N last time," not "will always work." The range in brackets (e.g. "90% [76–96%]") is a
+        statistical confidence interval: with a small number of past events, the <em>true</em> underlying
+        rate could plausibly be anywhere in that range — a narrow range means the number is well-supported,
+        a wide one means treat the headline percentage with real caution.</dd>
 
         <dt>Return per cycle (avg ± std dev)</dt>
         <dd>The average profit or loss (as a % of what you put in) across those past cycles, and how much
@@ -265,9 +268,11 @@
         much worse than the average — treat the average as a rough middle, not a promise.</dd>
 
         <dt>Risk-reward score</dt>
-        <dd>One number combining average return, hit rate, and how many days your money is tied up — used
-        only to rank stocks against each other. Higher is better; the number alone means nothing outside
-        this comparison.</dd>
+        <dd>One number combining average return, how many days your money is tied up, and hit rate — but
+        using the <em>low end</em> of the hit rate's confidence range, not the headline percentage, so a
+        stock that looks great only because it's had very few events doesn't automatically outrank one with
+        a slightly lower but much better-supported hit rate. Used only to rank stocks against each other;
+        higher is better, but the number alone means nothing outside this comparison.</dd>
 
         <dt>"Long-history model" vs "Recent-movement model" (buttons above)</dt>
         <dd>Two ways the computer estimated future prices: one leans on this stock's <em>entire</em> price
@@ -319,14 +324,14 @@
 
   <section>
     <h2>Ranked stocks</h2>
-    <p class="section-sub">Ranked by risk-reward score (backtested mean return per cycle × hit rate ÷ average hold days, across each ticker's recent ex-dividend events). Buy/sell timing shown is for the most recent event only.</p>
+    <p class="section-sub">Ranked by risk-reward score (backtested mean return per cycle × confidence-adjusted hit rate ÷ average hold days, across each ticker's recent ex-dividend events — see the guide above for what "confidence-adjusted" means). Buy/sell timing shown is for the most recent event only.</p>
     <div id="cardsView"></div>
     <div id="tableView">
       <table>
         <thead>
           <tr>
             <th>#</th><th>Ticker</th><th>Category</th><th>Yield</th>
-            <th>Buy</th><th>Sell</th><th>Backtest N</th><th>Hit rate</th><th>Return/cycle (avg ± sd)</th><th>Score</th>
+            <th>Buy</th><th>Sell</th><th>Backtest N</th><th>Hit rate [95% CI]</th><th>Return/cycle (avg ± sd)</th><th>Score</th>
           </tr>
         </thead>
         <tbody id="tableBody"></tbody>
@@ -370,36 +375,40 @@ const STOCKS = [
     "exDate": "2026-06-30",
     "dividend": 0.12,
     "cumClose": 11.0,
-    "riskRewardScore": 0.5909,
+    "riskRewardScore": 0.222,
     "chart": "../output/AGNC_paths.png",
-    "suitability": "Conservative pick",
-    "suitabilityReason": "Recovered in 88% of its last 8 dividend cycles, with a comparatively narrow spread of outcomes (\u00b14.7%).",
+    "suitability": "Aggressive pick",
+    "suitabilityReason": "Highest average payoff of the group (+2.3% per cycle), but outcomes swing wider (\u00b16.4%) between events.",
     "models": {
       "conservative": {
         "buyDaysBeforeEx": 0,
-        "entryPrice": 9.98,
+        "entryPrice": 10.01,
         "sellDaysAfterEx": 1,
-        "exitPrice": 10.89,
+        "exitPrice": 10.91,
         "recovered": true,
         "totalHoldDays": 1,
-        "netReturnPct": 10.336,
-        "backtestNEvents": 8,
-        "backtestHitRatePct": 87.5,
-        "backtestMeanReturnPct": 4.136,
-        "backtestStdReturnPct": 4.725
+        "netReturnPct": 10.106,
+        "backtestNEvents": 39,
+        "backtestHitRatePct": 89.7,
+        "backtestHitRateCiLoPct": 76.4,
+        "backtestHitRateCiHiPct": 95.9,
+        "backtestMeanReturnPct": 2.309,
+        "backtestStdReturnPct": 6.403
       },
       "recent": {
         "buyDaysBeforeEx": 0,
-        "entryPrice": 9.97,
+        "entryPrice": 10.01,
         "sellDaysAfterEx": 1,
-        "exitPrice": 10.89,
+        "exitPrice": 10.91,
         "recovered": true,
         "totalHoldDays": 1,
-        "netReturnPct": 10.408,
-        "backtestNEvents": 8,
-        "backtestHitRatePct": 87.5,
-        "backtestMeanReturnPct": 4.182,
-        "backtestStdReturnPct": 4.726
+        "netReturnPct": 10.119,
+        "backtestNEvents": 39,
+        "backtestHitRatePct": 92.3,
+        "backtestHitRateCiLoPct": 79.7,
+        "backtestHitRateCiHiPct": 97.3,
+        "backtestMeanReturnPct": 2.281,
+        "backtestStdReturnPct": 6.448
       }
     }
   },
@@ -412,83 +421,45 @@ const STOCKS = [
     "exDate": "2026-03-31",
     "dividend": 0.974,
     "cumClose": 91.55,
-    "riskRewardScore": 0.5309,
+    "riskRewardScore": 0.1685,
     "chart": "../output/TTE_paths.png",
     "suitability": "Aggressive pick",
-    "suitabilityReason": "Highest average payoff of the group (+4.3% per cycle), but outcomes swing wider (\u00b17.3%) between events.",
+    "suitabilityReason": "Highest average payoff of the group (+3.6% per cycle), but outcomes swing wider (\u00b16.6%) between events.",
     "models": {
       "conservative": {
         "buyDaysBeforeEx": 13,
-        "entryPrice": 79.52,
+        "entryPrice": 79.99,
         "sellDaysAfterEx": 1,
-        "exitPrice": 90.91,
+        "exitPrice": 91.45,
         "recovered": true,
         "totalHoldDays": 14,
-        "netReturnPct": 15.553,
-        "backtestNEvents": 8,
+        "netReturnPct": 15.55,
+        "backtestNEvents": 13,
         "backtestHitRatePct": 100.0,
-        "backtestMeanReturnPct": 4.313,
-        "backtestStdReturnPct": 7.298
+        "backtestHitRateCiLoPct": 77.2,
+        "backtestHitRateCiHiPct": 100.0,
+        "backtestMeanReturnPct": 3.643,
+        "backtestStdReturnPct": 6.57
       },
       "recent": {
         "buyDaysBeforeEx": 13,
-        "entryPrice": 79.52,
+        "entryPrice": 79.98,
         "sellDaysAfterEx": 1,
-        "exitPrice": 90.91,
+        "exitPrice": 91.45,
         "recovered": true,
         "totalHoldDays": 14,
-        "netReturnPct": 15.553,
-        "backtestNEvents": 8,
+        "netReturnPct": 15.558,
+        "backtestNEvents": 13,
         "backtestHitRatePct": 100.0,
-        "backtestMeanReturnPct": 4.303,
-        "backtestStdReturnPct": 7.292
+        "backtestHitRateCiLoPct": 77.2,
+        "backtestHitRateCiHiPct": 100.0,
+        "backtestMeanReturnPct": 3.633,
+        "backtestStdReturnPct": 6.574
       }
     }
   },
   {
     "rank": 3,
-    "ticker": "O",
-    "category": "hold \u2014 monthly-paying REIT (Realty Income)",
-    "trailingYieldPct": 5.73,
-    "qRatio": 1.4,
-    "exDate": "2026-06-30",
-    "dividend": 0.271,
-    "cumClose": 63.04,
-    "riskRewardScore": 0.1149,
-    "chart": "../output/O_paths.png",
-    "suitability": "Balanced",
-    "suitabilityReason": "Middling on both counts \u2014 75% hit rate, +2.2% average return.",
-    "models": {
-      "conservative": {
-        "buyDaysBeforeEx": 0,
-        "entryPrice": 59.84,
-        "sellDaysAfterEx": null,
-        "exitPrice": 62.17,
-        "recovered": false,
-        "totalHoldDays": 40,
-        "netReturnPct": 4.351,
-        "backtestNEvents": 8,
-        "backtestHitRatePct": 75.0,
-        "backtestMeanReturnPct": 2.182,
-        "backtestStdReturnPct": 3.777
-      },
-      "recent": {
-        "buyDaysBeforeEx": 0,
-        "entryPrice": 59.82,
-        "sellDaysAfterEx": null,
-        "exitPrice": 62.12,
-        "recovered": false,
-        "totalHoldDays": 40,
-        "netReturnPct": 4.3,
-        "backtestNEvents": 8,
-        "backtestHitRatePct": 62.5,
-        "backtestMeanReturnPct": 2.18,
-        "backtestStdReturnPct": 3.781
-      }
-    }
-  },
-  {
-    "rank": 4,
     "ticker": "STAG",
     "category": "hold \u2014 monthly-paying industrial REIT",
     "trailingYieldPct": 3.39,
@@ -496,36 +467,86 @@ const STOCKS = [
     "exDate": "2026-06-30",
     "dividend": 0.388,
     "cumClose": 39.16,
-    "riskRewardScore": 0.0242,
+    "riskRewardScore": 0.1076,
     "chart": "../output/STAG_paths.png",
-    "suitability": "Not recommended",
-    "suitabilityReason": "Only a 50% historical hit rate \u2014 weak track record either way.",
+    "suitability": "Balanced",
+    "suitabilityReason": "Middling on both counts \u2014 85% hit rate, +2.0% average return.",
     "models": {
       "conservative": {
-        "buyDaysBeforeEx": 5,
-        "entryPrice": 36.89,
+        "buyDaysBeforeEx": 6,
+        "entryPrice": 36.97,
         "sellDaysAfterEx": null,
-        "exitPrice": 38.1,
+        "exitPrice": 38.37,
         "recovered": false,
-        "totalHoldDays": 45,
-        "netReturnPct": 4.345,
-        "backtestNEvents": 8,
-        "backtestHitRatePct": 50.0,
-        "backtestMeanReturnPct": 1.245,
-        "backtestStdReturnPct": 5.235
+        "totalHoldDays": 46,
+        "netReturnPct": 4.835,
+        "backtestNEvents": 34,
+        "backtestHitRatePct": 85.3,
+        "backtestHitRateCiLoPct": 69.9,
+        "backtestHitRateCiHiPct": 93.6,
+        "backtestMeanReturnPct": 1.961,
+        "backtestStdReturnPct": 5.402
       },
       "recent": {
-        "buyDaysBeforeEx": 5,
-        "entryPrice": 36.88,
+        "buyDaysBeforeEx": 6,
+        "entryPrice": 36.98,
         "sellDaysAfterEx": null,
-        "exitPrice": 38.04,
+        "exitPrice": 38.39,
         "recovered": false,
-        "totalHoldDays": 45,
-        "netReturnPct": 4.215,
-        "backtestNEvents": 8,
-        "backtestHitRatePct": 50.0,
-        "backtestMeanReturnPct": 1.213,
-        "backtestStdReturnPct": 5.245
+        "totalHoldDays": 46,
+        "netReturnPct": 4.879,
+        "backtestNEvents": 34,
+        "backtestHitRatePct": 88.2,
+        "backtestHitRateCiLoPct": 73.4,
+        "backtestHitRateCiHiPct": 95.3,
+        "backtestMeanReturnPct": 2.005,
+        "backtestStdReturnPct": 5.391
+      }
+    }
+  },
+  {
+    "rank": 4,
+    "ticker": "O",
+    "category": "hold \u2014 monthly-paying REIT (Realty Income)",
+    "trailingYieldPct": 5.73,
+    "qRatio": 1.4,
+    "exDate": "2026-06-30",
+    "dividend": 0.271,
+    "cumClose": 63.04,
+    "riskRewardScore": 0.0587,
+    "chart": "../output/O_paths.png",
+    "suitability": "Balanced",
+    "suitabilityReason": "Middling on both counts \u2014 76% hit rate, +1.5% average return.",
+    "models": {
+      "conservative": {
+        "buyDaysBeforeEx": 2,
+        "entryPrice": 59.73,
+        "sellDaysAfterEx": null,
+        "exitPrice": 62.31,
+        "recovered": false,
+        "totalHoldDays": 42,
+        "netReturnPct": 4.774,
+        "backtestNEvents": 42,
+        "backtestHitRatePct": 76.2,
+        "backtestHitRateCiLoPct": 61.5,
+        "backtestHitRateCiHiPct": 86.5,
+        "backtestMeanReturnPct": 1.468,
+        "backtestStdReturnPct": 4.161
+      },
+      "recent": {
+        "buyDaysBeforeEx": 2,
+        "entryPrice": 59.69,
+        "sellDaysAfterEx": null,
+        "exitPrice": 62.18,
+        "recovered": false,
+        "totalHoldDays": 42,
+        "netReturnPct": 4.614,
+        "backtestNEvents": 42,
+        "backtestHitRatePct": 73.8,
+        "backtestHitRateCiLoPct": 58.9,
+        "backtestHitRateCiHiPct": 84.7,
+        "backtestMeanReturnPct": 1.458,
+        "backtestStdReturnPct": 4.166
       }
     }
   }
@@ -596,7 +617,7 @@ function cardHTML(stock) {
       </div>
       <div class="kpi-row" style="margin-top:8px">
         <div class="kpi"><div class="label">Backtest sample</div><div class="value">${m.backtestNEvents} past events</div></div>
-        <div class="kpi"><div class="label">Hit rate</div><div class="value">${m.backtestHitRatePct}% recovered</div></div>
+        <div class="kpi"><div class="label">Hit rate</div><div class="value">${m.backtestHitRatePct}% recovered <small>[${m.backtestHitRateCiLoPct}–${m.backtestHitRateCiHiPct}%]</small></div></div>
         <div class="kpi" style="grid-column: span 2"><div class="label">Return per cycle (backtested)</div><div class="value">${fmtPct(m.backtestMeanReturnPct)} <small>± ${m.backtestStdReturnPct.toFixed(2)}% (1 std dev)</small></div></div>
       </div>
       ${!m.recovered ? `<div class="not-recovered-note">Most recent event did not find a full recovery within 40 trading days under the ${currentModel} model — the "sell" figure above uses day 40's expected price, not a true breakeven. The backtest hit-rate above already accounts for this across all sampled events.</div>` : ""}
@@ -623,7 +644,7 @@ function renderTable() {
       <td>${m.buyDaysBeforeEx}d before</td>
       <td>${sellText}</td>
       <td>${m.backtestNEvents}</td>
-      <td>${m.backtestHitRatePct}%</td>
+      <td>${m.backtestHitRatePct}% [${m.backtestHitRateCiLoPct}–${m.backtestHitRateCiHiPct}%]</td>
       <td>${fmtPct(m.backtestMeanReturnPct)} ± ${m.backtestStdReturnPct.toFixed(2)}%</td>
       <td>${stock.riskRewardScore}</td>
     </tr>`;
@@ -681,7 +702,7 @@ function updateCalculator() {
     </div>
     <div class="stat-tile" style="grid-column: 1 / -1; background:var(--accent-wash)">
       <div class="label">This is one event, not a forecast</div>
-      <div class="value" style="font-size:1.05rem">Backtested across ${m.backtestNEvents} past cycles: ${fmtPct(m.backtestMeanReturnPct)} avg ± ${m.backtestStdReturnPct.toFixed(2)}%, ${m.backtestHitRatePct}% hit rate</div>
+      <div class="value" style="font-size:1.05rem">Backtested across ${m.backtestNEvents} past cycles: ${fmtPct(m.backtestMeanReturnPct)} avg ± ${m.backtestStdReturnPct.toFixed(2)}%, ${m.backtestHitRatePct}% hit rate [${m.backtestHitRateCiLoPct}–${m.backtestHitRateCiHiPct}%]</div>
       <div class="hint">The dollar figures above use this one most-recent event's expected prices. The range here is what actually happened across this ticker's other recent ex-dividend cycles — use it to judge how much the number above could be off by, not the number itself as a forecast.</div>
     </div>
     ${!m.recovered ? `<div class="calc-warning">The most recent event did not reach a full price recovery within the 40-day search window — the exit price used here is the model's expected price at day 40, not a confirmed breakeven. The backtest hit-rate above already reflects how often that happens historically.</div>` : ""}

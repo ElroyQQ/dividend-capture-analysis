@@ -192,3 +192,79 @@ biggest remaining gap is the one named in `docs/system_architecture.md`'s
 "Known limitations": GARCH's mean equation is fixed at zero, so any
 directional drift beyond regime persistence and the (now properly windowed)
 calendar term isn't modeled at all.
+
+## Session 6: accuracy optimizations, and a real numerical bug
+
+Asked, again, to research and implement accuracy improvements. Researched
+first (EGARCH vs. GJR-GARCH vs. GARCH for equity volatility, Wilson score
+confidence intervals for small-sample proportions — see
+`docs/system_architecture.md` for citations), then implemented: EGARCH
+replacing symmetric GARCH (captures the equity "leverage effect" GARCH
+structurally can't represent), Wilson confidence intervals on hit rate
+(both displayed and used directly in the ranking formula), and raising the
+backtest sample cap from 8 to up to 50 events per ticker (runtime allowed
+it — still under 20 seconds end to end).
+
+**Testing the sample-size increase surfaced a real, previously-latent
+numerical bug**, not present at the old cap by luck rather than by design:
+some historical windows' EGARCH fits converge (the optimizer reports
+success) to parameters that are numerically nonsensical. Traced one
+specific case (`O`, fit window ending 2023-02-28): a Student-t fit's
+degrees-of-freedom estimate landed at `ν≈2.08` — right at the boundary
+where the Student-t distribution's variance stops being finite. This
+produced `alpha=748.7`, `gamma=234.3`, `beta=1.0` (typical sane values are
+all well under 1) and a forecasted variance of `e^710`, several hundred
+orders of magnitude past what a `float64` can represent. The simulated
+price paths overflowed to `inf`, then `inf - inf` arithmetic downstream
+produced `nan`, silently corrupting that ticker's aggregate backtest
+statistics.
+
+This was **not** caught by checking `res.convergence_flag` — the optimizer
+considered this fit successful. Each attempted fix was verified by
+re-running the specific failing case in isolation before moving on, rather
+than assuming a plausible-sounding patch had worked:
+1. First attempt: clip the log-variance *recursion* to a wide band. Didn't
+   fully fix it — the band (±15 in log-space) was still wide enough to
+   permit an absurd sigma (~360,000% daily volatility).
+2. Second attempt: clip the recursion to a *realistic* band (±4, anchored
+   to the window's own empirical log-variance). Reduced but didn't
+   eliminate the problem — the bootstrapped *residual pool itself*
+   contained values in the hundreds (a symptom of the same degenerate fit:
+   its in-sample conditional volatility estimates collapsed to near-zero
+   for a few days, making `residual / near-zero-volatility` explode), so
+   even a correctly-bounded sigma multiplied by an unbounded `z` still blew
+   up over a 40-day compounding horizon.
+3. Third attempt (the one that actually fixed it): clip the standardized
+   residual pool itself to ±10 before it gets bootstrapped, **and**
+   explicitly detect and reject a degenerate parameter set
+   (`|alpha|>20`, `|gamma|>20`, or `|beta|≥1`) rather than trying to
+   numerically patch its output into looking plausible — retry once with a
+   Normal distribution (no degrees-of-freedom parameter to degenerate), and
+   if that also fails, skip that one historical event from the backtest
+   rather than let corrupted numbers into an aggregate.
+
+The general lesson, consistent with this project's existing "don't guess,
+verify" pattern: a downstream numerical patch (clipping the recursion) can
+mask a symptom without fixing the cause, and can require multiple
+iterations to even fully mask it. Rejecting a bad fit at the source, once
+identified, was simpler and more honest than chasing tighter and tighter
+clips.
+
+A second, independent bug surfaced by the same higher-sample-size testing:
+`_usable_event_indices` only required `PRE_WINDOW` (15) days of pre-event
+history, nowhere near enough to fit a stable model (especially the
+"recent" variant's 252-day lookback). Fixed with an explicit
+`MIN_FIT_HISTORY = 300` floor. Both bugs were latent at the old cap of 8
+events (which happened to stay within recent, well-behaved history) —
+another argument, beyond the intended statistical-power motivation, for
+why raising the sample size was worth doing carefully rather than assumed
+safe by default.
+
+**Also fixed in passing, unrelated to the above**: `trailing_dividend_yield`
+returned `NaN` for every ticker on this session's first run.
+`data_io.fetch_history` was returning a trailing row for the most recent
+session with a `NaN` Close — `yfinance` occasionally appends a
+not-yet-finalized row before a session's data is complete. Now dropped at
+ingestion (`fetch_history` filters `Close.notna()`) rather than left to
+propagate NaN into whatever downstream calculation happens to touch the
+last row first.

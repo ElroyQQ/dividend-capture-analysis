@@ -51,6 +51,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).parent))
 import data_io
 import markov
+from markov import DegenerateFitError
 
 ROOT = Path(__file__).resolve().parent.parent
 OUTPUT = ROOT / "output"
@@ -70,16 +71,40 @@ MODEL_SPECS = {
 
 PRE_WINDOW = 15            # trading days before ex-div date to search for entry
 POST_WINDOW = 40           # trading days after ex-div date to search for recovery
+MIN_FIT_HISTORY = 300      # min trading days of pre-event history required to fit a model
 N_SIMS_HEADLINE = 100_000  # most recent event only — used for the interface/chart
 N_SIMS_BACKTEST = 8_000    # per historical event in the multi-event aggregate
-MAX_BACKTEST_EVENTS = 8    # cap on how many past events get the full search (runtime)
+MAX_BACKTEST_EVENTS = 50   # cap on how many past events get the full search (runtime)
+
+
+def wilson_interval(successes: int, n: int, z: float = 1.96) -> tuple[float, float]:
+    """95% Wilson score confidence interval for a binomial proportion (hit
+    rate). Unlike a naive +/- on the raw percentage, this doesn't collapse
+    to zero width at 0%/100% and has much better coverage at small n — the
+    exact situation an 8-or-20-event backtest is in. A reported "100% hit
+    rate, n=8" without this looks far more certain than it is; see
+    docs/system_architecture.md for the citation."""
+    if n == 0:
+        return (0.0, 1.0)
+    p = successes / n
+    denom = 1 + z**2 / n
+    center = (p + z**2 / (2 * n)) / denom
+    margin = z * np.sqrt(p * (1 - p) / n + z**2 / (4 * n**2)) / denom
+    return (max(0.0, center - margin), min(1.0, center + margin))
 
 
 def _usable_event_indices(history: pd.DataFrame, events: pd.DataFrame) -> list[int]:
+    """Ex-dividend events with enough history on both sides to run the full
+    search. MIN_FIT_HISTORY (comfortably more than the "recent" model's
+    252-day lookback) matters, not just PRE_WINDOW — an event with only, say,
+    20 days of prior history technically has "enough" for the entry-window
+    search itself, but nowhere near enough for a stable GARCH fit. Events
+    that early produced NaN parameters/returns when this wasn't enforced
+    (caught by testing with a larger MAX_BACKTEST_EVENTS)."""
     idxs = []
     for ex_date in events.index:
         idx = history.index.get_loc(ex_date)
-        if idx - PRE_WINDOW >= 0 and idx + POST_WINDOW < len(history):
+        if idx - PRE_WINDOW - MIN_FIT_HISTORY >= 0 and idx + POST_WINDOW < len(history):
             idxs.append(idx)
     return idxs
 
@@ -169,28 +194,46 @@ def analyze_ticker(ticker: str) -> dict:
 
     # --- Multi-event backtest: statistical aggregate across up to MAX_BACKTEST_EVENTS ---
     per_label_events = {label: [] for label in MODEL_SPECS}
+    n_skipped_degenerate = 0
     for seed_i, idx in enumerate(backtest_idxs):
         ex_date = history.index[idx]
         dividend = float(history.loc[ex_date, "Dividends"])
         cum_close = float(history["Close"].iloc[idx - 1])
         ex_close = float(history["Close"].iloc[idx])
         prior_indices = [i for i in usable_idxs if i < idx - PRE_WINDOW]
-        event_result = _entry_exit_search(history, idx, dividend, cum_close, ex_close,
-                                           prior_indices, n_sims=N_SIMS_BACKTEST,
-                                           seed_base=100 + seed_i * 10, event_gap=event_gap)
+        try:
+            event_result = _entry_exit_search(history, idx, dividend, cum_close, ex_close,
+                                               prior_indices, n_sims=N_SIMS_BACKTEST,
+                                               seed_base=100 + seed_i * 10, event_gap=event_gap)
+        except DegenerateFitError:
+            # Rare (see markov.DegenerateFitError) — a specific historical
+            # window's EGARCH fit didn't converge to sane parameters even
+            # after a distribution retry. Skip this one event rather than
+            # let corrupted numbers into the aggregate; n_events in the
+            # report reflects the actual sample used, not backtest_idxs'
+            # length, so this stays honest rather than silently padded.
+            n_skipped_degenerate += 1
+            continue
         for label in MODEL_SPECS:
             per_label_events[label].append(event_result[label])
 
     backtest_summary = {}
     for label, ev_list in per_label_events.items():
         n = len(ev_list)
-        hit_rate = sum(e["recovered"] for e in ev_list) / n
+        if n == 0:
+            raise ValueError(f"{ticker}/{label}: every backtested event's fit was degenerate "
+                              f"({n_skipped_degenerate} skipped) — no usable sample.")
+        hits = sum(e["recovered"] for e in ev_list)
+        hit_rate = hits / n
+        hit_rate_lo, hit_rate_hi = wilson_interval(hits, n)
         recovered_days = [e["sell_days_after_ex"] for e in ev_list if e["recovered"]]
         net_returns = np.array([e["net_return_pct"] for e in ev_list])
         hold_days = np.array([e["total_hold_days"] for e in ev_list])
         backtest_summary[label] = {
             "n_events": n,
+            "n_skipped_degenerate": n_skipped_degenerate,
             "hit_rate": hit_rate,
+            "hit_rate_ci": (hit_rate_lo, hit_rate_hi),
             "median_recovery_days": float(np.median(recovered_days)) if recovered_days else None,
             "mean_net_return_pct": float(net_returns.mean()),
             "std_net_return_pct": float(net_returns.std(ddof=1)) if n > 1 else 0.0,
@@ -198,18 +241,32 @@ def analyze_ticker(ticker: str) -> dict:
         }
 
     # --- Headline event: full-fidelity single-event detail for the chart/interface ---
-    ex_date = headline_date
-    dividend = float(history.loc[ex_date, "Dividends"])
-    cum_close = float(history["Close"].iloc[headline_idx - 1])
-    ex_close = float(history["Close"].iloc[headline_idx])
-    prior_indices = [i for i in usable_idxs if i < headline_idx - PRE_WINDOW]
-    headline = _entry_exit_search(history, headline_idx, dividend, cum_close, ex_close,
-                                   prior_indices, n_sims=N_SIMS_HEADLINE, seed_base=1,
-                                   event_gap=event_gap, keep_paths=True)
+    # Try the most recent usable event first; if its fit is degenerate (rare
+    # — see DegenerateFitError), fall back to the next most recent rather
+    # than let one bad historical window take down the whole ticker.
+    headline = None
+    for candidate_idx in reversed(usable_idxs[-6:]):
+        ex_date = history.index[candidate_idx]
+        dividend = float(history.loc[ex_date, "Dividends"])
+        cum_close = float(history["Close"].iloc[candidate_idx - 1])
+        ex_close = float(history["Close"].iloc[candidate_idx])
+        prior_indices = [i for i in usable_idxs if i < candidate_idx - PRE_WINDOW]
+        try:
+            headline = _entry_exit_search(history, candidate_idx, dividend, cum_close, ex_close,
+                                           prior_indices, n_sims=N_SIMS_HEADLINE, seed_base=1,
+                                           event_gap=event_gap, keep_paths=True)
+            headline_idx = candidate_idx
+            headline_date = ex_date
+            break
+        except DegenerateFitError:
+            continue
+    if headline is None:
+        raise ValueError(f"{ticker}: the last 6 usable events all had degenerate fits — "
+                          f"can't produce a headline chart/detail view.")
 
     result = {
         "ticker": ticker, "q_ratio": q_ratio, "trailing_yield": trailing_yield,
-        "ex_date": ex_date, "dividend": dividend, "cum_close": cum_close,
+        "ex_date": headline_date, "dividend": dividend, "cum_close": cum_close,
         "headline": headline, "backtest": backtest_summary,
     }
     plot_paths(ticker, history, headline_idx, result)
@@ -235,8 +292,9 @@ def plot_paths(ticker: str, history: pd.DataFrame, ex_idx: int, result: dict) ->
     ax.axhline(result["cum_close"] - result["dividend"], color="gray", lw=1, ls=":",
                label="Recovery target (cum price − dividend)")
     bt = result["backtest"]["conservative"]
+    ci_lo, ci_hi = bt["hit_rate_ci"]
     ax.set_title(f"{ticker}: price around ex-dividend date {result['ex_date'].date()}  "
-                 f"(backtest: {bt['hit_rate']*100:.0f}% hit rate, n={bt['n_events']})")
+                 f"(backtest: {bt['hit_rate']*100:.0f}% hit rate [{ci_lo*100:.0f}–{ci_hi*100:.0f}%], n={bt['n_events']})")
     ax.set_xlabel("Trading days relative to ex-dividend date")
     ax.set_ylabel("Price ($)")
     ax.legend(fontsize=8)
@@ -249,10 +307,15 @@ def rank(results: list[dict]) -> pd.DataFrame:
     rows = []
     for r in results:
         bt = r["backtest"]["conservative"]
-        # Risk-reward: mean per-cycle return, discounted by how often the
-        # backtest actually recovered, expressed per day held. Backed by
-        # bt['n_events'] historical trials rather than a single event.
-        score = (bt["mean_net_return_pct"] * bt["hit_rate"]) / bt["mean_hold_days"]
+        hit_rate_lo, hit_rate_hi = bt["hit_rate_ci"]
+        # Risk-reward: mean per-cycle return, discounted by the *lower bound*
+        # of the Wilson confidence interval on hit rate (not the raw point
+        # estimate) — a ticker with "100% hit rate, n=8" and one with "100%
+        # hit rate, n=40" shouldn't score identically; the smaller sample's
+        # true hit rate could plausibly be much lower, and the CI lower
+        # bound reflects that directly in the ranking, not just in a
+        # footnote. Expressed per day held.
+        score = (bt["mean_net_return_pct"] * hit_rate_lo) / bt["mean_hold_days"]
         rows.append({
             "ticker": r["ticker"],
             "category": TICKERS[r["ticker"]],
@@ -260,6 +323,7 @@ def rank(results: list[dict]) -> pd.DataFrame:
             "median_Q_ratio": round(r["q_ratio"], 2),
             "n_backtest_events": bt["n_events"],
             "hit_rate_pct": round(bt["hit_rate"] * 100, 1),
+            "hit_rate_95ci": f"{hit_rate_lo*100:.0f}–{hit_rate_hi*100:.0f}%",
             "mean_return_per_cycle_pct": round(bt["mean_net_return_pct"], 3),
             "std_return_per_cycle_pct": round(bt["std_net_return_pct"], 3),
             "median_recovery_days": bt["median_recovery_days"] if bt["median_recovery_days"] is not None else f">{POST_WINDOW}",
@@ -324,14 +388,21 @@ def write_report(df: pd.DataFrame, suitability: dict[str, dict]) -> None:
              "(capped, most recent first) were actually run through the entry/exit search, and "
              "what fraction of those recovered to breakeven within the window — the ranking's "
              "statistical sample size, not a single anecdote.",
+             "- `hit_rate_95ci`: 95% Wilson confidence interval on the hit rate — how much the "
+             "true hit rate could plausibly differ from the point estimate given the sample size. "
+             "A narrow interval means the hit rate is well-supported; a wide one (common at small "
+             "n) means don't over-read the headline percentage.",
              "- `mean_return_per_cycle_pct` / `std_return_per_cycle_pct`: average and spread of "
              "net return (price change + dividend, relative to entry price) across those "
              "backtested events under the conservative model.",
              "- `median_Q_ratio`: historical ex-div price drop ÷ dividend paid, across all usable "
              "events (not just the backtested subset). <1.0 = price tends to drop by less than "
              "the dividend; >1.0 = drops by more.",
-             "- `risk_reward_score = mean_return_per_cycle_pct × hit_rate ÷ mean_hold_days` — "
-             "return per day held, discounted by how reliably the backtest actually recovered.",
+             "- `risk_reward_score = mean_return_per_cycle_pct × (Wilson CI lower bound on hit "
+             "rate) ÷ mean_hold_days` — return per day held, discounted by how reliably the "
+             "backtest recovered *and* by how much sample size backs that reliability. Uses the "
+             "CI lower bound rather than the raw hit rate so a small-sample \"100%\" doesn't "
+             "outscore a larger-sample, slightly-lower hit rate that's actually better supported.",
              "- See AI_Performance_Report.md for where this model is and isn't reliable.",
              ""]
     (OUTPUT / "report.md").write_text("\n".join(lines))
@@ -357,6 +428,8 @@ def build_interface_records(results: list[dict], df: pd.DataFrame,
                 "netReturnPct": round(h["net_return_pct"], 3),
                 "backtestNEvents": bt["n_events"],
                 "backtestHitRatePct": round(bt["hit_rate"] * 100, 1),
+                "backtestHitRateCiLoPct": round(bt["hit_rate_ci"][0] * 100, 1),
+                "backtestHitRateCiHiPct": round(bt["hit_rate_ci"][1] * 100, 1),
                 "backtestMeanReturnPct": round(bt["mean_net_return_pct"], 3),
                 "backtestStdReturnPct": round(bt["std_net_return_pct"], 3),
             }

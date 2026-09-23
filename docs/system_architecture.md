@@ -29,18 +29,22 @@ data_io.py          →  markov.py              →  analysis_engine.py
 - `trailing_dividend_yield(history)`: trailing-12-month dividends ÷ latest
   close.
 
-### 2. GARCH-filtered regime-bootstrap Markov / Monte Carlo engine — `src/markov.py`
+### 2. EGARCH-filtered regime-bootstrap Markov / Monte Carlo engine — `src/markov.py`
 
-Upgraded in session 3 from a plain quantile-bucketed return bootstrap to a
-**filtered historical simulation** — a standard technique for capturing
-volatility clustering (see references at the end of this file):
+Session 3 upgraded this from a plain quantile-bucketed return bootstrap to a
+**filtered historical simulation** using symmetric GARCH(1,1). **Session 6
+upgraded GARCH → EGARCH(1,1,1)** to capture the well-documented equity
+"leverage effect" (a down move raises future volatility more than an equal-
+sized up move) — plain GARCH can't represent that asymmetry at all, and
+EGARCH is reported in the literature as producing the best equity
+volatility forecasts among the common GARCH-family models (see references
+at the end of this file):
 
-- A **GARCH(1,1)** model (via the `arch` package) is fit to daily log
+- An **EGARCH(1,1,1)** model (via the `arch` package) is fit to daily log
   returns first. `conservative` uses a Student-t error distribution on the
   full price history (down-weights the influence of extreme spikes on the
-  fitted parameters — replacing the old ad hoc return-winsorizing);
-  `recent` uses a Normal distribution on the trailing ~252 trading days.
-  Mean equation is fixed at zero (`mean="Zero"`) — GARCH here models
+  fitted parameters); `recent` uses a Normal distribution on the trailing
+  ~252 trading days. Mean equation is fixed at zero (`mean="Zero"`) —
   volatility only; any directional drift comes from the regime bootstrap's
   own skew and, separately and deliberately, the calendar-drift term below.
 - The model's **standardized residuals** (`return / conditional_volatility`)
@@ -49,21 +53,51 @@ volatility clustering (see references at the end of this file):
   to stationary than classifying raw returns directly, which is what the
   project brief's own limitation note ("financial markets exhibit
   non-stationary distributions... must often be augmented") was flagging.
-- `simulate()` is a **regime bootstrap on top of a live GARCH variance
-  recursion**: at each simulated day, the next state is drawn from the
-  transition matrix, an actual historical standardized residual from that
-  state's pool is resampled, scaled by the *current* GARCH-forecasted
-  volatility (not a flat historical average), and the GARCH variance
-  recursion (`σ²_t = ω + α·ε²_{t-1} + β·σ²_{t-1}`) is rolled forward
-  per simulated path. Default: 100,000 paths for the headline event.
+- `simulate()` rolls the EGARCH **log-variance recursion**
+  (`ln σ²_t = ω + β·ln σ²_{t-1} + α·(|z_{t-1}| − E|z|) + γ·z_{t-1}`, where
+  `γ` is the asymmetry/leverage term GARCH doesn't have) forward per
+  simulated path, drawing each day's shock `z` from the current regime
+  state's bootstrapped residual pool and scaling by the *current*
+  EGARCH-forecasted volatility. `E|z|` is estimated empirically from the
+  fit's own residuals rather than assumed from a parametric distribution,
+  consistent with bootstrapping empirical residuals elsewhere. Default:
+  100,000 paths for the headline event.
 - **Antithetic variates**: half the paths are simulated normally; the other
-  half mirrors them by negating each day's drawn shock. Because the GARCH
-  variance recursion depends on `ε²` (sign-invariant), the mirrored path's
-  volatility trajectory is identical — only the return signs flip — so this
-  is a cheap, exact variance-reduction technique here, not an approximation.
+  half reuses the *same drawn shock magnitudes*, negated. Unlike symmetric
+  GARCH (where this made the mirrored path's whole volatility trajectory
+  identical to the base path's), EGARCH's recursion is *not* invariant to
+  the shock's sign — that asymmetry is the entire point of using it — so
+  both signs run their own log-variance recursion from the same starting
+  point, sharing only the drawn `|z|` magnitudes and state sequence. Still
+  a valid, cheap variance-reduction pairing on the return draws themselves.
 - `apply_calendar_drift()`: multiplies a deterministic, ticker-specific
   seasonal adjustment into the simulated paths (see below) — kept separate
-  from the random GARCH process since it's not a random shock.
+  from the random EGARCH process since it's not a random shock.
+
+**Numerical safety net (session 6)**: backtesting many historical windows
+surfaced a real failure mode — a Student-t fit whose degrees-of-freedom
+estimate landed near the finite-variance boundary (`ν≈2`) produced
+parameters two-plus orders of magnitude outside any sane range (`alpha≈749`,
+`gamma≈234`), which blew the simulated price paths up to `inf`/`nan` over a
+40-day horizon. `convergence_flag == 0` (the optimizer's own "success"
+signal) did **not** catch this — it's a degenerate optimum, not a failed
+search. Three layers now guard against it, in order of how far upstream
+they act:
+1. `_is_degenerate()` rejects a fit outright if `|alpha| > 20`, `|gamma| >
+   20`, or `|beta| ≥ 1` — a Student-t fit that fails this gets one retry
+   with a Normal distribution (which has no degrees-of-freedom parameter to
+   degenerate); if that also fails, `fit_model()` raises
+   `DegenerateFitError` and the caller skips that one historical event
+   rather than let corrupted numbers into an aggregate.
+2. Standardized residuals are clipped to `±10` before being bootstrapped —
+   a well-behaved residual is roughly unit-scale, so a value in the
+   hundreds (found empirically on the degenerate fit above) is a numerical
+   artifact, not real market behavior.
+3. The starting and per-step log-variance are each clipped to a `±4` band
+   around a data-grounded reference (the window's own empirical
+   log-variance, and the simulation's own starting point, respectively) —
+   generous for real volatility regimes (daily sigma up to ~7x either
+   direction) without leaving room for runaway values.
 
 ### 3. Ex-dividend calendar drift — `data_io.seasonal_return_pattern()`
 
@@ -91,24 +125,48 @@ calendar drift rather than a contaminated one.
 The original version scored each ticker off a single historical ex-dividend
 event — statistically an N=1 anecdote. Now, for every ticker:
 
-- **Backtest loop**: the most recent `MAX_BACKTEST_EVENTS` (8) usable
-  ex-dividend events each get the full entry/exit Monte Carlo search
-  (8,000 paths each, for runtime — antithetic variates make this still a
-  reasonably low-noise estimate). Results are aggregated into `hit_rate`
-  (fraction that recovered within the 40-day window), `mean`/`std` of net
-  return per cycle, and `median_recovery_days`.
-- **Headline event**: the single most recent event additionally gets a
-  full 100,000-path run (`keep_paths=True`) purely for the interface's
-  chart and "buy/sell this specific event" display numbers.
+- **Event eligibility (`_usable_event_indices`, tightened session 6)**: an
+  ex-dividend event needs both enough post-event data for the search window
+  *and* `MIN_FIT_HISTORY` (300 trading days) of **pre**-event history — not
+  just `PRE_WINDOW`. An event with only 20 days of prior history technically
+  has enough for the entry-window search itself, but nowhere near enough to
+  fit a stable EGARCH model (particularly the "recent" variant's 252-day
+  lookback). Events that early were a second, independent source of the
+  bad-fit problem described above, found the same way: by testing with a
+  larger `MAX_BACKTEST_EVENTS` and tracing the resulting `NaN` back to its
+  source rather than assuming it away.
+- **Backtest loop**: the most recent `MAX_BACKTEST_EVENTS` (**50**, raised
+  from 8 in session 6 — full pipeline runtime is still under 20 seconds, so
+  the original cap was leaving statistical power on the table) usable
+  ex-dividend events each get the full entry/exit Monte Carlo search (8,000
+  paths each). Results are aggregated into `hit_rate` (with a **95% Wilson
+  confidence interval**, see below), `mean`/`std` of net return per cycle,
+  and `median_recovery_days`. Events whose fit is rejected as degenerate
+  (see above) are skipped, not padded with a guess — `n_events` in the
+  output reflects the actual usable sample, which can be meaningfully
+  smaller than `MAX_BACKTEST_EVENTS` (e.g. TTE, with only ~19 quarterly
+  events in 5 years total).
+- **Headline event**: the most recent event that produces a *non-degenerate*
+  fit (tries up to the 6 most recent before giving up) gets a full
+  100,000-path run (`keep_paths=True`) purely for the interface's chart and
+  "buy/sell this specific event" display numbers.
 - **Entry search**: lowest mean-expected-price day in the 15 trading days
-  before the ex-div date (now GARCH + calendar-drift driven, not a flat
+  before the ex-div date (EGARCH + calendar-drift driven, not a flat
   bootstrap).
 - **Exit search**: first day after the ex-div date where mean expected
   price + dividend ≥ pre-dividend price.
-- **Ranking**: `risk_reward_score = mean_return_per_cycle% × hit_rate ÷
-  mean_hold_days` (conservative model) — return per day held, discounted by
-  how reliably the backtest actually recovered, backed by up to 8 historical
-  trials instead of one.
+- **`wilson_interval(successes, n)`**: a 95% Wilson score confidence
+  interval on the hit rate — chosen over a naive ± on the raw percentage
+  because it has much better coverage at small `n` and doesn't collapse to
+  zero width at 0%/100% (a naive interval would report "100% hit rate,
+  ±0%" off an `n=8` sample, which is not remotely justified). See
+  references below.
+- **Ranking**: `risk_reward_score = mean_return_per_cycle% × wilson_lower_bound(hit_rate)
+  ÷ mean_hold_days` (conservative model) — return per day held, discounted
+  by the Wilson interval's *lower* bound rather than the raw hit rate, so a
+  ticker whose "100%" is backed by only a handful of events doesn't
+  automatically outrank one with a slightly lower but much better-supported
+  rate.
 
 Outputs land in `output/`: `report.md` (human-readable), `ranking.csv`
 (machine-readable), and one `<ticker>_paths.png` chart per ticker showing
@@ -116,7 +174,7 @@ actual price vs. both models' expected paths (now spanning the *entry* and
 exit windows) around the headline event, annotated with the backtest hit
 rate.
 
-### References consulted for this session's methodology
+### References consulted (session 3 + session 6)
 
 - Filtered historical simulation (GARCH + bootstrap): `arch` package docs
   (bashtage.github.io/arch), and the general FHS approach described in
@@ -131,8 +189,16 @@ rate.
 - Multi-event/walk-forward backtest aggregation: standard practice in
   quantitative strategy validation (e.g. QuantInsti, Interactive Brokers'
   Quant News "Walk Forward Analysis").
+- EGARCH vs. GJR-GARCH vs. GARCH for equity volatility (leverage effect):
+  academic comparisons (e.g. a 2025 realized-EGARCH study on the Nikkei
+  225) reporting EGARCH as producing the best equity volatility forecasts
+  among the common GARCH-family variants.
+- Wilson score confidence intervals for small-sample binomial proportions
+  (hit rate): standard statistics reference (e.g. statisticshowto.com),
+  chosen specifically for its coverage advantage over a naive Wald interval
+  at small `n` and at proportions near 0%/100%.
 
-### 4. Interface — `src/interface_template.html` → `interface/index.html`
+### 5. Interface — `src/interface_template.html` → `interface/index.html`
 
 `build_interface_records()` reshapes the per-ticker results (both model
 variants) into a JSON array — rank, category, trailing yield, buy/sell
@@ -187,7 +253,7 @@ A companion `## Quick picks` table (ticker → best-for label → one-line
 reason) is written into `output/report.md` from the same function, so the
 CSV/report/interface all agree.
 
-## Known limitations (updated session 3)
+## Known limitations (updated session 6)
 
 - **The calendar-drift term is a historical average, not a forecast of
   future demand.** It corrects the "the model can't see the calendar at
@@ -200,18 +266,27 @@ CSV/report/interface all agree.
   either side)** by construction, to avoid contaminating the estimate with
   the neighboring dividend cycle. Days further out than that in the 15/40
   entry/exit window get no calendar signal at all, not a best-effort one.
-- **GARCH's mean equation is fixed at zero.** Any general (non-calendar,
+- **EGARCH's mean equation is fixed at zero.** Any general (non-calendar,
   non-regime) directional drift a ticker might have is not modeled — a
   deliberate choice to avoid conflating a noisy naive drift estimate with
   the volatility model, but it does mean the simulation won't reproduce a
   sustained trend that isn't captured by regime persistence or the
-  calendar term.
-- **The backtest is capped at 8 events per ticker** for runtime, most
-  recent first — for TTE's quarterly dividends that's 2 years of history;
-  for the monthly REITs, about 8 months. Longer history is available (see
-  `median_Q_ratio`, computed over the *full* 5y window) but isn't run
-  through the full Monte Carlo search.
+  calendar term. Unchanged by the GARCH→EGARCH upgrade — EGARCH fixed the
+  *volatility* model's symmetry assumption, not this one.
+- **The backtest is capped at 50 events per ticker** (raised from 8 in
+  session 6), most recent first, and further limited by `MIN_FIT_HISTORY` —
+  for TTE's quarterly dividends that's its full ~5-year usable history
+  (~13-14 events); for the monthly REITs, roughly 3 years. `median_Q_ratio`
+  alone is still computed over the full 5y window regardless of the
+  backtest cap.
+- **A small fraction of historical windows produce a fit degenerate enough
+  to reject outright** (see the numerical-safety-net note above) — those
+  events are silently absent from `n_events`, not flagged individually in
+  the output. If a ticker's `n_events` looks surprisingly low relative to
+  its total dividend history, this is the likely reason; it isn't currently
+  surfaced as its own statistic.
 
 See `AI_Performance_Report.md` for what these look like empirically,
 including a specific example where the multi-event backtest overturned a
-conclusion the single-event version of this tool had drawn.
+conclusion the single-event version of this tool had drawn, and the
+session-6 debugging trail for the degenerate-fit numerical issue.
