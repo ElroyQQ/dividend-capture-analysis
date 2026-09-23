@@ -150,6 +150,14 @@
     font-size: 0.78rem; font-weight: 600; flex-shrink: 0;
   }
   .card-top .ticker { font-weight: 700; font-size: 1.05rem; }
+  .card-topn { border-color: var(--warning); box-shadow: 0 0 0 1px var(--warning); }
+  .topn-pill {
+    display: inline-block; margin-left: 6px; vertical-align: middle;
+    background: var(--warning); color: #1a1200;
+    font-size: 0.68rem; font-weight: 700; letter-spacing: .02em;
+    padding: 2px 7px; border-radius: 999px;
+  }
+  .topn-star { color: var(--warning); margin-left: 3px; font-size: 0.85em; }
   .card-top .category { color: var(--text-secondary); font-size: 0.8rem; }
   .status-pill {
     margin-left: auto;
@@ -238,7 +246,7 @@
   <header>
     <h1>Dividend Capture — Ranked Interface</h1>
     <p class="sub">
-      Generated 2026-09-23 09:52 · 40-day post-dividend search window · 100,000-path Monte Carlo per model
+      Generated 2026-09-23 10:05 · 40-day post-dividend search window · 100,000-path Monte Carlo per model
       <span class="refresh-indicator" id="refreshIndicator" title="Reloads this page from disk every 60s — only shows new numbers once the analysis has actually been rerun, see the guide below.">
         <span class="refresh-dot"></span><span id="refreshText">Auto-refreshing in 60s</span>
       </span>
@@ -338,8 +346,8 @@
   </div>
 
   <section>
-    <h2>Quick picks</h2>
-    <p class="section-sub">The short version — one line per stock. See "Ranked stocks" below for full detail and the simulation charts.</p>
+    <h2>Top 5 quick picks</h2>
+    <p class="section-sub">The current top 5 by risk-reward score out of all <span id="totalStockCount"></span> analyzed — this list can change between runs as prices and backtests update. See "All ranked stocks" below for the complete list.</p>
     <div class="card">
       <table>
         <thead>
@@ -351,16 +359,16 @@
   </section>
 
   <section>
-    <h2>Compare all stocks</h2>
-    <p class="section-sub">Each stock's actual price around its ex-dividend date, indexed to 100 on that day, overlaid on one chart — so you can compare how volatile and how quick-to-recover each one has actually been, at a glance. Real historical prices, not simulated.</p>
+    <h2>Compare top 5</h2>
+    <p class="section-sub">Each of the current top 5's actual price around its ex-dividend date, indexed to 100 on that day, overlaid on one chart — so you can compare how volatile and how quick-to-recover each one has actually been, at a glance. Real historical prices, not simulated. Limited to 5 tickers so the lines stay legible — see "All ranked stocks" below for everyone else.</p>
     <div class="card">
-      <img src="../output/comparison_paths.png" alt="Normalized price comparison across all tickers" style="width:100%; border-radius:8px;" loading="lazy">
+      <img src="../output/comparison_paths.png" alt="Normalized price comparison across the top 5 tickers" style="width:100%; border-radius:8px;" loading="lazy">
     </div>
   </section>
 
   <section>
-    <h2>Ranked stocks</h2>
-    <p class="section-sub">Ranked by risk-reward score (backtested mean return per cycle × confidence-adjusted hit rate ÷ average hold days, across each ticker's recent ex-dividend events — see the guide above for what "confidence-adjusted" means). Buy/sell timing shown is for the most recent event only.</p>
+    <h2>All ranked stocks</h2>
+    <p class="section-sub">Every ticker analyzed, ranked by risk-reward score (backtested mean return per cycle × confidence-adjusted hit rate ÷ average hold days — see the guide above for what "confidence-adjusted" means). The top 5 (marked ★) are the ones in the sections above; buy/sell timing shown is for the most recent event only.</p>
     <div id="cardsView"></div>
     <div id="tableView">
       <table>
@@ -404,6 +412,7 @@
 const STOCKS = [
   {
     "rank": 1,
+    "isTopN": true,
     "ticker": "AGNC",
     "category": "hold \u2014 monthly-paying mortgage REIT",
     "trailingYieldPct": 14.44,
@@ -450,6 +459,54 @@ const STOCKS = [
   },
   {
     "rank": 2,
+    "isTopN": true,
+    "ticker": "JPM",
+    "category": "hold \u2014 financials, quarterly dividend",
+    "trailingYieldPct": 1.7,
+    "qRatio": 0.92,
+    "exDate": "2026-04-06",
+    "dividend": 1.5,
+    "cumClose": 294.6,
+    "riskRewardScore": 0.2128,
+    "chart": "../output/JPM_paths.png",
+    "suitability": "Conservative pick",
+    "suitabilityReason": "Recovered in 100% of its last 14 dividend cycles, with a comparatively narrow spread of outcomes (\u00b14.4%).",
+    "models": {
+      "conservative": {
+        "buyDaysBeforeEx": 15,
+        "entryPrice": 283.44,
+        "sellDaysAfterEx": 1,
+        "exitPrice": 296.06,
+        "recovered": true,
+        "totalHoldDays": 16,
+        "netReturnPct": 4.983,
+        "backtestNEvents": 14,
+        "backtestHitRatePct": 100.0,
+        "backtestHitRateCiLoPct": 78.5,
+        "backtestHitRateCiHiPct": 100.0,
+        "backtestMeanReturnPct": 4.339,
+        "backtestStdReturnPct": 4.355
+      },
+      "recent": {
+        "buyDaysBeforeEx": 13,
+        "entryPrice": 283.42,
+        "sellDaysAfterEx": 1,
+        "exitPrice": 296.06,
+        "recovered": true,
+        "totalHoldDays": 14,
+        "netReturnPct": 4.99,
+        "backtestNEvents": 14,
+        "backtestHitRatePct": 92.9,
+        "backtestHitRateCiLoPct": 68.5,
+        "backtestHitRateCiHiPct": 98.7,
+        "backtestMeanReturnPct": 4.32,
+        "backtestStdReturnPct": 4.375
+      }
+    }
+  },
+  {
+    "rank": 3,
+    "isTopN": true,
     "ticker": "TTE",
     "category": "trade_exit \u2014 energy major, quarterly dividend",
     "trailingYieldPct": 3.29,
@@ -495,7 +552,149 @@ const STOCKS = [
     }
   },
   {
-    "rank": 3,
+    "rank": 4,
+    "isTopN": true,
+    "ticker": "CVX",
+    "category": "trade_exit \u2014 energy major, quarterly dividend",
+    "trailingYieldPct": 3.46,
+    "qRatio": 0.91,
+    "exDate": "2026-05-19",
+    "dividend": 1.78,
+    "cumClose": 196.12,
+    "riskRewardScore": 0.1636,
+    "chart": "../output/CVX_paths.png",
+    "suitability": "Aggressive pick",
+    "suitabilityReason": "Highest average payoff of the group (+4.7% per cycle), but outcomes swing wider (\u00b15.6%) between events.",
+    "models": {
+      "conservative": {
+        "buyDaysBeforeEx": 10,
+        "entryPrice": 184.09,
+        "sellDaysAfterEx": 1,
+        "exitPrice": 197.56,
+        "recovered": true,
+        "totalHoldDays": 11,
+        "netReturnPct": 8.284,
+        "backtestNEvents": 12,
+        "backtestHitRatePct": 91.7,
+        "backtestHitRateCiLoPct": 64.6,
+        "backtestHitRateCiHiPct": 98.5,
+        "backtestMeanReturnPct": 4.662,
+        "backtestStdReturnPct": 5.596
+      },
+      "recent": {
+        "buyDaysBeforeEx": 10,
+        "entryPrice": 184.02,
+        "sellDaysAfterEx": 1,
+        "exitPrice": 197.54,
+        "recovered": true,
+        "totalHoldDays": 11,
+        "netReturnPct": 8.314,
+        "backtestNEvents": 12,
+        "backtestHitRatePct": 91.7,
+        "backtestHitRateCiLoPct": 64.6,
+        "backtestHitRateCiHiPct": 98.5,
+        "backtestMeanReturnPct": 4.664,
+        "backtestStdReturnPct": 5.617
+      }
+    }
+  },
+  {
+    "rank": 5,
+    "isTopN": true,
+    "ticker": "PG",
+    "category": "hold \u2014 consumer staples, quarterly dividend",
+    "trailingYieldPct": 2.94,
+    "qRatio": 0.67,
+    "exDate": "2026-07-24",
+    "dividend": 1.089,
+    "cumClose": 146.97,
+    "riskRewardScore": 0.1518,
+    "chart": "../output/PG_paths.png",
+    "suitability": "Conservative pick",
+    "suitabilityReason": "Recovered in 93% of its last 14 dividend cycles, with a comparatively narrow spread of outcomes (\u00b13.7%).",
+    "models": {
+      "conservative": {
+        "buyDaysBeforeEx": 9,
+        "entryPrice": 149.32,
+        "sellDaysAfterEx": 1,
+        "exitPrice": 148.3,
+        "recovered": true,
+        "totalHoldDays": 10,
+        "netReturnPct": 0.042,
+        "backtestNEvents": 14,
+        "backtestHitRatePct": 92.9,
+        "backtestHitRateCiLoPct": 68.5,
+        "backtestHitRateCiHiPct": 98.7,
+        "backtestMeanReturnPct": 2.437,
+        "backtestStdReturnPct": 3.726
+      },
+      "recent": {
+        "buyDaysBeforeEx": 9,
+        "entryPrice": 149.3,
+        "sellDaysAfterEx": 1,
+        "exitPrice": 148.3,
+        "recovered": true,
+        "totalHoldDays": 10,
+        "netReturnPct": 0.056,
+        "backtestNEvents": 14,
+        "backtestHitRatePct": 92.9,
+        "backtestHitRateCiLoPct": 68.5,
+        "backtestHitRateCiHiPct": 98.7,
+        "backtestMeanReturnPct": 2.448,
+        "backtestStdReturnPct": 3.752
+      }
+    }
+  },
+  {
+    "rank": 6,
+    "isTopN": false,
+    "ticker": "MMM",
+    "category": "hold \u2014 industrials, quarterly dividend",
+    "trailingYieldPct": 1.86,
+    "qRatio": 1.26,
+    "exDate": "2026-05-22",
+    "dividend": 0.78,
+    "cumClose": 151.6,
+    "riskRewardScore": 0.1096,
+    "chart": "../output/MMM_paths.png",
+    "suitability": "Conservative pick",
+    "suitabilityReason": "Recovered in 90% of its last 10 dividend cycles, with a comparatively narrow spread of outcomes (\u00b14.6%).",
+    "models": {
+      "conservative": {
+        "buyDaysBeforeEx": 12,
+        "entryPrice": 142.03,
+        "sellDaysAfterEx": 1,
+        "exitPrice": 152.01,
+        "recovered": true,
+        "totalHoldDays": 13,
+        "netReturnPct": 7.574,
+        "backtestNEvents": 10,
+        "backtestHitRatePct": 90.0,
+        "backtestHitRateCiLoPct": 59.6,
+        "backtestHitRateCiHiPct": 98.2,
+        "backtestMeanReturnPct": 3.696,
+        "backtestStdReturnPct": 4.574
+      },
+      "recent": {
+        "buyDaysBeforeEx": 12,
+        "entryPrice": 142.02,
+        "sellDaysAfterEx": 1,
+        "exitPrice": 152.0,
+        "recovered": true,
+        "totalHoldDays": 13,
+        "netReturnPct": 7.577,
+        "backtestNEvents": 10,
+        "backtestHitRatePct": 90.0,
+        "backtestHitRateCiLoPct": 59.6,
+        "backtestHitRateCiHiPct": 98.2,
+        "backtestMeanReturnPct": 3.668,
+        "backtestStdReturnPct": 4.552
+      }
+    }
+  },
+  {
+    "rank": 7,
+    "isTopN": false,
     "ticker": "STAG",
     "category": "hold \u2014 monthly-paying industrial REIT",
     "trailingYieldPct": 3.39,
@@ -541,7 +740,196 @@ const STOCKS = [
     }
   },
   {
-    "rank": 4,
+    "rank": 8,
+    "isTopN": false,
+    "ticker": "SPG",
+    "category": "hold \u2014 retail REIT (Simon Property Group), quarterly dividend",
+    "trailingYieldPct": 4.34,
+    "qRatio": 1.03,
+    "exDate": "2026-06-09",
+    "dividend": 2.25,
+    "cumClose": 207.34,
+    "riskRewardScore": 0.0808,
+    "chart": "../output/SPG_paths.png",
+    "suitability": "Aggressive pick",
+    "suitabilityReason": "Highest average payoff of the group (+3.8% per cycle), but outcomes swing wider (\u00b16.3%) between events.",
+    "models": {
+      "conservative": {
+        "buyDaysBeforeEx": 11,
+        "entryPrice": 199.83,
+        "sellDaysAfterEx": 1,
+        "exitPrice": 211.21,
+        "recovered": true,
+        "totalHoldDays": 12,
+        "netReturnPct": 6.818,
+        "backtestNEvents": 13,
+        "backtestHitRatePct": 76.9,
+        "backtestHitRateCiLoPct": 49.7,
+        "backtestHitRateCiHiPct": 91.8,
+        "backtestMeanReturnPct": 3.759,
+        "backtestStdReturnPct": 6.267
+      },
+      "recent": {
+        "buyDaysBeforeEx": 11,
+        "entryPrice": 199.82,
+        "sellDaysAfterEx": 1,
+        "exitPrice": 211.2,
+        "recovered": true,
+        "totalHoldDays": 12,
+        "netReturnPct": 6.824,
+        "backtestNEvents": 13,
+        "backtestHitRatePct": 76.9,
+        "backtestHitRateCiLoPct": 49.7,
+        "backtestHitRateCiHiPct": 91.8,
+        "backtestMeanReturnPct": 3.761,
+        "backtestStdReturnPct": 6.261
+      }
+    }
+  },
+  {
+    "rank": 9,
+    "isTopN": false,
+    "ticker": "XOM",
+    "category": "trade_exit \u2014 energy major, quarterly dividend",
+    "trailingYieldPct": 2.6,
+    "qRatio": 0.71,
+    "exDate": "2026-05-15",
+    "dividend": 1.03,
+    "cumClose": 152.78,
+    "riskRewardScore": 0.0806,
+    "chart": "../output/XOM_paths.png",
+    "suitability": "Aggressive pick",
+    "suitabilityReason": "Highest average payoff of the group (+4.9% per cycle), but outcomes swing wider (\u00b14.7%) between events.",
+    "models": {
+      "conservative": {
+        "buyDaysBeforeEx": 7,
+        "entryPrice": 147.01,
+        "sellDaysAfterEx": 1,
+        "exitPrice": 156.86,
+        "recovered": true,
+        "totalHoldDays": 8,
+        "netReturnPct": 7.402,
+        "backtestNEvents": 12,
+        "backtestHitRatePct": 66.7,
+        "backtestHitRateCiLoPct": 39.1,
+        "backtestHitRateCiHiPct": 86.2,
+        "backtestMeanReturnPct": 4.866,
+        "backtestStdReturnPct": 4.738
+      },
+      "recent": {
+        "buyDaysBeforeEx": 7,
+        "entryPrice": 147.05,
+        "sellDaysAfterEx": 1,
+        "exitPrice": 156.86,
+        "recovered": true,
+        "totalHoldDays": 8,
+        "netReturnPct": 7.374,
+        "backtestNEvents": 12,
+        "backtestHitRatePct": 66.7,
+        "backtestHitRateCiLoPct": 39.1,
+        "backtestHitRateCiHiPct": 86.2,
+        "backtestMeanReturnPct": 4.871,
+        "backtestStdReturnPct": 4.677
+      }
+    }
+  },
+  {
+    "rank": 10,
+    "isTopN": false,
+    "ticker": "JNJ",
+    "category": "hold \u2014 healthcare, quarterly dividend",
+    "trailingYieldPct": 1.96,
+    "qRatio": 0.98,
+    "exDate": "2026-05-26",
+    "dividend": 1.34,
+    "cumClose": 234.34,
+    "riskRewardScore": 0.0764,
+    "chart": "../output/JNJ_paths.png",
+    "suitability": "Aggressive pick",
+    "suitabilityReason": "Highest average payoff of the group (+3.1% per cycle), but outcomes swing wider (\u00b14.5%) between events.",
+    "models": {
+      "conservative": {
+        "buyDaysBeforeEx": 14,
+        "entryPrice": 223.67,
+        "sellDaysAfterEx": null,
+        "exitPrice": 230.75,
+        "recovered": false,
+        "totalHoldDays": 54,
+        "netReturnPct": 3.762,
+        "backtestNEvents": 12,
+        "backtestHitRatePct": 75.0,
+        "backtestHitRateCiLoPct": 46.8,
+        "backtestHitRateCiHiPct": 91.1,
+        "backtestMeanReturnPct": 3.118,
+        "backtestStdReturnPct": 4.499
+      },
+      "recent": {
+        "buyDaysBeforeEx": 14,
+        "entryPrice": 223.68,
+        "sellDaysAfterEx": null,
+        "exitPrice": 230.18,
+        "recovered": false,
+        "totalHoldDays": 54,
+        "netReturnPct": 3.504,
+        "backtestNEvents": 12,
+        "backtestHitRatePct": 75.0,
+        "backtestHitRateCiLoPct": 46.8,
+        "backtestHitRateCiHiPct": 91.1,
+        "backtestMeanReturnPct": 3.107,
+        "backtestStdReturnPct": 4.489
+      }
+    }
+  },
+  {
+    "rank": 11,
+    "isTopN": false,
+    "ticker": "DUK",
+    "category": "hold \u2014 utility, quarterly dividend",
+    "trailingYieldPct": 3.67,
+    "qRatio": 0.81,
+    "exDate": "2026-05-15",
+    "dividend": 1.065,
+    "cumClose": 124.31,
+    "riskRewardScore": 0.0661,
+    "chart": "../output/DUK_paths.png",
+    "suitability": "Balanced",
+    "suitabilityReason": "Middling on both counts \u2014 85% hit rate, +1.7% average return.",
+    "models": {
+      "conservative": {
+        "buyDaysBeforeEx": 14,
+        "entryPrice": 127.18,
+        "sellDaysAfterEx": null,
+        "exitPrice": 121.87,
+        "recovered": false,
+        "totalHoldDays": 54,
+        "netReturnPct": -3.341,
+        "backtestNEvents": 13,
+        "backtestHitRatePct": 84.6,
+        "backtestHitRateCiLoPct": 57.8,
+        "backtestHitRateCiHiPct": 95.7,
+        "backtestMeanReturnPct": 1.691,
+        "backtestStdReturnPct": 4.545
+      },
+      "recent": {
+        "buyDaysBeforeEx": 0,
+        "entryPrice": 127.18,
+        "sellDaysAfterEx": null,
+        "exitPrice": 121.66,
+        "recovered": false,
+        "totalHoldDays": 40,
+        "netReturnPct": -3.505,
+        "backtestNEvents": 13,
+        "backtestHitRatePct": 84.6,
+        "backtestHitRateCiLoPct": 57.8,
+        "backtestHitRateCiHiPct": 95.7,
+        "backtestMeanReturnPct": 1.688,
+        "backtestStdReturnPct": 4.573
+      }
+    }
+  },
+  {
+    "rank": 12,
+    "isTopN": false,
     "ticker": "O",
     "category": "hold \u2014 monthly-paying REIT (Realty Income)",
     "trailingYieldPct": 5.73,
@@ -585,6 +973,241 @@ const STOCKS = [
         "backtestStdReturnPct": 4.166
       }
     }
+  },
+  {
+    "rank": 13,
+    "isTopN": false,
+    "ticker": "SO",
+    "category": "hold \u2014 utility, quarterly dividend",
+    "trailingYieldPct": 3.51,
+    "qRatio": 0.54,
+    "exDate": "2026-05-18",
+    "dividend": 0.76,
+    "cumClose": 92.55,
+    "riskRewardScore": 0.0454,
+    "chart": "../output/SO_paths.png",
+    "suitability": "Balanced",
+    "suitabilityReason": "Middling on both counts \u2014 86% hit rate, +1.5% average return.",
+    "models": {
+      "conservative": {
+        "buyDaysBeforeEx": 7,
+        "entryPrice": 93.33,
+        "sellDaysAfterEx": 1,
+        "exitPrice": 93.68,
+        "recovered": true,
+        "totalHoldDays": 8,
+        "netReturnPct": 1.194,
+        "backtestNEvents": 14,
+        "backtestHitRatePct": 85.7,
+        "backtestHitRateCiLoPct": 60.1,
+        "backtestHitRateCiHiPct": 96.0,
+        "backtestMeanReturnPct": 1.545,
+        "backtestStdReturnPct": 4.746
+      },
+      "recent": {
+        "buyDaysBeforeEx": 7,
+        "entryPrice": 93.31,
+        "sellDaysAfterEx": 1,
+        "exitPrice": 93.68,
+        "recovered": true,
+        "totalHoldDays": 8,
+        "netReturnPct": 1.209,
+        "backtestNEvents": 14,
+        "backtestHitRatePct": 85.7,
+        "backtestHitRateCiLoPct": 60.1,
+        "backtestHitRateCiHiPct": 96.0,
+        "backtestMeanReturnPct": 1.543,
+        "backtestStdReturnPct": 4.732
+      }
+    }
+  },
+  {
+    "rank": 14,
+    "isTopN": false,
+    "ticker": "MAIN",
+    "category": "hold \u2014 monthly-paying BDC (Main Street Capital)",
+    "trailingYieldPct": 7.68,
+    "qRatio": 0.91,
+    "exDate": "2026-07-08",
+    "dividend": 0.265,
+    "cumClose": 52.41,
+    "riskRewardScore": 0.045,
+    "chart": "../output/MAIN_paths.png",
+    "suitability": "Balanced",
+    "suitabilityReason": "Middling on both counts \u2014 84% hit rate, +1.5% average return.",
+    "models": {
+      "conservative": {
+        "buyDaysBeforeEx": 15,
+        "entryPrice": 51.29,
+        "sellDaysAfterEx": null,
+        "exitPrice": 51.48,
+        "recovered": false,
+        "totalHoldDays": 55,
+        "netReturnPct": 0.893,
+        "backtestNEvents": 49,
+        "backtestHitRatePct": 83.7,
+        "backtestHitRateCiLoPct": 71.0,
+        "backtestHitRateCiHiPct": 91.5,
+        "backtestMeanReturnPct": 1.514,
+        "backtestStdReturnPct": 3.872
+      },
+      "recent": {
+        "buyDaysBeforeEx": 15,
+        "entryPrice": 51.29,
+        "sellDaysAfterEx": null,
+        "exitPrice": 51.57,
+        "recovered": false,
+        "totalHoldDays": 55,
+        "netReturnPct": 1.057,
+        "backtestNEvents": 49,
+        "backtestHitRatePct": 79.6,
+        "backtestHitRateCiLoPct": 66.4,
+        "backtestHitRateCiHiPct": 88.5,
+        "backtestMeanReturnPct": 1.473,
+        "backtestStdReturnPct": 3.964
+      }
+    }
+  },
+  {
+    "rank": 15,
+    "isTopN": false,
+    "ticker": "KO",
+    "category": "hold \u2014 consumer staples, quarterly dividend",
+    "trailingYieldPct": 2.41,
+    "qRatio": 0.9,
+    "exDate": "2026-06-15",
+    "dividend": 0.53,
+    "cumClose": 82.62,
+    "riskRewardScore": 0.0395,
+    "chart": "../output/KO_paths.png",
+    "suitability": "Conservative pick",
+    "suitabilityReason": "Recovered in 93% of its last 14 dividend cycles, with a comparatively narrow spread of outcomes (\u00b12.6%).",
+    "models": {
+      "conservative": {
+        "buyDaysBeforeEx": 6,
+        "entryPrice": 81.06,
+        "sellDaysAfterEx": null,
+        "exitPrice": 81.75,
+        "recovered": false,
+        "totalHoldDays": 46,
+        "netReturnPct": 1.508,
+        "backtestNEvents": 14,
+        "backtestHitRatePct": 92.9,
+        "backtestHitRateCiLoPct": 68.5,
+        "backtestHitRateCiHiPct": 98.7,
+        "backtestMeanReturnPct": 1.161,
+        "backtestStdReturnPct": 2.632
+      },
+      "recent": {
+        "buyDaysBeforeEx": 6,
+        "entryPrice": 81.07,
+        "sellDaysAfterEx": null,
+        "exitPrice": 81.76,
+        "recovered": false,
+        "totalHoldDays": 46,
+        "netReturnPct": 1.51,
+        "backtestNEvents": 14,
+        "backtestHitRatePct": 92.9,
+        "backtestHitRateCiLoPct": 68.5,
+        "backtestHitRateCiHiPct": 98.7,
+        "backtestMeanReturnPct": 1.166,
+        "backtestStdReturnPct": 2.628
+      }
+    }
+  },
+  {
+    "rank": 16,
+    "isTopN": false,
+    "ticker": "VZ",
+    "category": "hold \u2014 telecom, quarterly dividend",
+    "trailingYieldPct": 5.86,
+    "qRatio": 1.25,
+    "exDate": "2026-07-10",
+    "dividend": 0.708,
+    "cumClose": 42.24,
+    "riskRewardScore": 0.0054,
+    "chart": "../output/VZ_paths.png",
+    "suitability": "Balanced",
+    "suitabilityReason": "Middling on both counts \u2014 69% hit rate, +0.4% average return.",
+    "models": {
+      "conservative": {
+        "buyDaysBeforeEx": 0,
+        "entryPrice": 45.6,
+        "sellDaysAfterEx": 1,
+        "exitPrice": 42.09,
+        "recovered": true,
+        "totalHoldDays": 1,
+        "netReturnPct": -6.14,
+        "backtestNEvents": 13,
+        "backtestHitRatePct": 69.2,
+        "backtestHitRateCiLoPct": 42.4,
+        "backtestHitRateCiHiPct": 87.3,
+        "backtestMeanReturnPct": 0.376,
+        "backtestStdReturnPct": 7.382
+      },
+      "recent": {
+        "buyDaysBeforeEx": 0,
+        "entryPrice": 45.61,
+        "sellDaysAfterEx": 1,
+        "exitPrice": 42.09,
+        "recovered": true,
+        "totalHoldDays": 1,
+        "netReturnPct": -6.161,
+        "backtestNEvents": 13,
+        "backtestHitRatePct": 76.9,
+        "backtestHitRateCiLoPct": 49.7,
+        "backtestHitRateCiHiPct": 91.8,
+        "backtestMeanReturnPct": 0.405,
+        "backtestStdReturnPct": 7.398
+      }
+    }
+  },
+  {
+    "rank": 17,
+    "isTopN": false,
+    "ticker": "T",
+    "category": "hold \u2014 telecom, quarterly dividend",
+    "trailingYieldPct": 4.37,
+    "qRatio": 1.1,
+    "exDate": "2026-07-10",
+    "dividend": 0.278,
+    "cumClose": 21.04,
+    "riskRewardScore": 0.0006,
+    "chart": "../output/T_paths.png",
+    "suitability": "Balanced",
+    "suitabilityReason": "Middling on both counts \u2014 75% hit rate, +0.0% average return.",
+    "models": {
+      "conservative": {
+        "buyDaysBeforeEx": 0,
+        "entryPrice": 22.22,
+        "sellDaysAfterEx": 1,
+        "exitPrice": 21.04,
+        "recovered": true,
+        "totalHoldDays": 1,
+        "netReturnPct": -4.053,
+        "backtestNEvents": 12,
+        "backtestHitRatePct": 75.0,
+        "backtestHitRateCiLoPct": 46.8,
+        "backtestHitRateCiHiPct": 91.1,
+        "backtestMeanReturnPct": 0.032,
+        "backtestStdReturnPct": 5.076
+      },
+      "recent": {
+        "buyDaysBeforeEx": 0,
+        "entryPrice": 22.2,
+        "sellDaysAfterEx": 1,
+        "exitPrice": 21.04,
+        "recovered": true,
+        "totalHoldDays": 1,
+        "netReturnPct": -3.966,
+        "backtestNEvents": 12,
+        "backtestHitRatePct": 75.0,
+        "backtestHitRateCiLoPct": 46.8,
+        "backtestHitRateCiHiPct": 91.1,
+        "backtestMeanReturnPct": 0.134,
+        "backtestStdReturnPct": 5.034
+      }
+    }
   }
 ];
 let currentModel = "conservative";
@@ -610,7 +1233,9 @@ function suitabilityColor(label) {
 }
 
 function renderQuickPicks() {
-  document.getElementById("quickPicksBody").innerHTML = STOCKS.map(stock => {
+  const totalEl = document.getElementById("totalStockCount");
+  if (totalEl) totalEl.textContent = STOCKS.length;
+  document.getElementById("quickPicksBody").innerHTML = STOCKS.filter(s => s.isTopN).map(stock => {
     const m = stock.models[currentModel];
     const color = suitabilityColor(stock.suitability);
     const sellText = m.sellDaysAfterEx === null ? `no recovery in 40d` : `${m.sellDaysAfterEx}d after ex-div`;
@@ -634,11 +1259,13 @@ function cardHTML(stock) {
     ? `no recovery within 40d`
     : `${m.sellDaysAfterEx}d after ex-div, ~${fmtUSD(m.exitPrice)}`;
   return `
-    <div class="card">
+    <div class="card${stock.isTopN ? " card-topn" : ""}">
       <div class="card-top">
         <div class="rank-badge">${stock.rank}</div>
         <div>
-          <div class="ticker">${stock.ticker} <span class="status-pill" style="color:${suitabilityColor(stock.suitability)}; border-color:${suitabilityColor(stock.suitability)}; font-size:0.7rem; padding:2px 7px; vertical-align:middle;">${stock.suitability}</span></div>
+          <div class="ticker">${stock.ticker}
+            ${stock.isTopN ? `<span class="topn-pill" title="Currently in the top 5 by risk-reward score">★ TOP 5</span>` : ""}
+            <span class="status-pill" style="color:${suitabilityColor(stock.suitability)}; border-color:${suitabilityColor(stock.suitability)}; font-size:0.7rem; padding:2px 7px; vertical-align:middle;">${stock.suitability}</span></div>
           <div class="category">${stock.category}</div>
         </div>
         <div class="status-pill" style="color:${status.color}; border-color:${status.color}">
@@ -672,8 +1299,8 @@ function renderTable() {
   document.getElementById("tableBody").innerHTML = STOCKS.map(stock => {
     const m = stock.models[currentModel];
     const sellText = m.sellDaysAfterEx === null ? `>40d` : `${m.sellDaysAfterEx}d after`;
-    return `<tr>
-      <td>${stock.rank}</td>
+    return `<tr${stock.isTopN ? ' style="background:var(--accent-wash)"' : ""}>
+      <td>${stock.rank}${stock.isTopN ? ' <span class="topn-star" title="Top 5">★</span>' : ""}</td>
       <td>${stock.ticker}</td>
       <td>${stock.category}</td>
       <td>${stock.trailingYieldPct.toFixed(2)}%</td>

@@ -150,6 +150,14 @@
     font-size: 0.78rem; font-weight: 600; flex-shrink: 0;
   }
   .card-top .ticker { font-weight: 700; font-size: 1.05rem; }
+  .card-topn { border-color: var(--warning); box-shadow: 0 0 0 1px var(--warning); }
+  .topn-pill {
+    display: inline-block; margin-left: 6px; vertical-align: middle;
+    background: var(--warning); color: #1a1200;
+    font-size: 0.68rem; font-weight: 700; letter-spacing: .02em;
+    padding: 2px 7px; border-radius: 999px;
+  }
+  .topn-star { color: var(--warning); margin-left: 3px; font-size: 0.85em; }
   .card-top .category { color: var(--text-secondary); font-size: 0.8rem; }
   .status-pill {
     margin-left: auto;
@@ -338,8 +346,8 @@
   </div>
 
   <section>
-    <h2>Quick picks</h2>
-    <p class="section-sub">The short version — one line per stock. See "Ranked stocks" below for full detail and the simulation charts.</p>
+    <h2>Top __TOP_N__ quick picks</h2>
+    <p class="section-sub">The current top __TOP_N__ by risk-reward score out of all <span id="totalStockCount"></span> analyzed — this list can change between runs as prices and backtests update. See "All ranked stocks" below for the complete list.</p>
     <div class="card">
       <table>
         <thead>
@@ -351,16 +359,16 @@
   </section>
 
   <section>
-    <h2>Compare all stocks</h2>
-    <p class="section-sub">Each stock's actual price around its ex-dividend date, indexed to 100 on that day, overlaid on one chart — so you can compare how volatile and how quick-to-recover each one has actually been, at a glance. Real historical prices, not simulated.</p>
+    <h2>Compare top __TOP_N__</h2>
+    <p class="section-sub">Each of the current top __TOP_N__'s actual price around its ex-dividend date, indexed to 100 on that day, overlaid on one chart — so you can compare how volatile and how quick-to-recover each one has actually been, at a glance. Real historical prices, not simulated. Limited to __TOP_N__ tickers so the lines stay legible — see "All ranked stocks" below for everyone else.</p>
     <div class="card">
-      <img src="../output/comparison_paths.png" alt="Normalized price comparison across all tickers" style="width:100%; border-radius:8px;" loading="lazy">
+      <img src="../output/comparison_paths.png" alt="Normalized price comparison across the top __TOP_N__ tickers" style="width:100%; border-radius:8px;" loading="lazy">
     </div>
   </section>
 
   <section>
-    <h2>Ranked stocks</h2>
-    <p class="section-sub">Ranked by risk-reward score (backtested mean return per cycle × confidence-adjusted hit rate ÷ average hold days, across each ticker's recent ex-dividend events — see the guide above for what "confidence-adjusted" means). Buy/sell timing shown is for the most recent event only.</p>
+    <h2>All ranked stocks</h2>
+    <p class="section-sub">Every ticker analyzed, ranked by risk-reward score (backtested mean return per cycle × confidence-adjusted hit rate ÷ average hold days — see the guide above for what "confidence-adjusted" means). The top __TOP_N__ (marked ★) are the ones in the sections above; buy/sell timing shown is for the most recent event only.</p>
     <div id="cardsView"></div>
     <div id="tableView">
       <table>
@@ -425,7 +433,9 @@ function suitabilityColor(label) {
 }
 
 function renderQuickPicks() {
-  document.getElementById("quickPicksBody").innerHTML = STOCKS.map(stock => {
+  const totalEl = document.getElementById("totalStockCount");
+  if (totalEl) totalEl.textContent = STOCKS.length;
+  document.getElementById("quickPicksBody").innerHTML = STOCKS.filter(s => s.isTopN).map(stock => {
     const m = stock.models[currentModel];
     const color = suitabilityColor(stock.suitability);
     const sellText = m.sellDaysAfterEx === null ? `no recovery in __POST_WINDOW__d` : `${m.sellDaysAfterEx}d after ex-div`;
@@ -449,11 +459,13 @@ function cardHTML(stock) {
     ? `no recovery within __POST_WINDOW__d`
     : `${m.sellDaysAfterEx}d after ex-div, ~${fmtUSD(m.exitPrice)}`;
   return `
-    <div class="card">
+    <div class="card${stock.isTopN ? " card-topn" : ""}">
       <div class="card-top">
         <div class="rank-badge">${stock.rank}</div>
         <div>
-          <div class="ticker">${stock.ticker} <span class="status-pill" style="color:${suitabilityColor(stock.suitability)}; border-color:${suitabilityColor(stock.suitability)}; font-size:0.7rem; padding:2px 7px; vertical-align:middle;">${stock.suitability}</span></div>
+          <div class="ticker">${stock.ticker}
+            ${stock.isTopN ? `<span class="topn-pill" title="Currently in the top __TOP_N__ by risk-reward score">★ TOP __TOP_N__</span>` : ""}
+            <span class="status-pill" style="color:${suitabilityColor(stock.suitability)}; border-color:${suitabilityColor(stock.suitability)}; font-size:0.7rem; padding:2px 7px; vertical-align:middle;">${stock.suitability}</span></div>
           <div class="category">${stock.category}</div>
         </div>
         <div class="status-pill" style="color:${status.color}; border-color:${status.color}">
@@ -487,8 +499,8 @@ function renderTable() {
   document.getElementById("tableBody").innerHTML = STOCKS.map(stock => {
     const m = stock.models[currentModel];
     const sellText = m.sellDaysAfterEx === null ? `>__POST_WINDOW__d` : `${m.sellDaysAfterEx}d after`;
-    return `<tr>
-      <td>${stock.rank}</td>
+    return `<tr${stock.isTopN ? ' style="background:var(--accent-wash)"' : ""}>
+      <td>${stock.rank}${stock.isTopN ? ' <span class="topn-star" title="Top __TOP_N__">★</span>' : ""}</td>
       <td>${stock.ticker}</td>
       <td>${stock.category}</td>
       <td>${stock.trailingYieldPct.toFixed(2)}%</td>

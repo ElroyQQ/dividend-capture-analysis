@@ -120,6 +120,38 @@ days) — 9 days either side for the monthly REITs, the full 15/40 for TTE's
 ~62-trading-day quarterly gap. Days beyond the safe window get zero
 calendar drift rather than a contaminated one.
 
+### 3.5. Ticker universe and the "top N" (session 8)
+
+Until session 8, `TICKERS` was a fixed 4-symbol starter set, and the
+dashboard just ranked those 4 against each other — there was no sense in
+which a "top 5" could change, since only 4 tickers ever existed to rank.
+Prompted by a user question ("how would it update if the top 5 changes"),
+`TICKERS` is now a diversified **17-symbol universe** (energy, REITs of
+several kinds, telecom, consumer staples, healthcare, utilities, a BDC,
+industrials, financials), and `TOP_N` (5) controls how many of those,
+by `risk_reward_score`, count as "top":
+
+- `main()` now ranks **before** generating the comparison chart, so
+  `plot_comparison_chart()` can be told which tickers are actually
+  top-N this run (`df["ticker"].iloc[:TOP_N]`) — the chart shows only
+  those, both for legibility (17 overlaid lines would be unreadable) and
+  because that's the comparison a viewer actually wants.
+- `build_interface_records()` stamps each record with `isTopN`
+  (`rank <= TOP_N`), which the interface uses to filter the "Top N quick
+  picks" table to just those and to badge them (★, gold border) in the
+  full "All ranked stocks" list, which shows every analyzed ticker.
+- **This is the actual answer to "how does it update if the top 5
+  changes":** the top 5 is computed fresh every run of `analysis_engine.py`
+  from `risk_reward_score` — if a ticker's backtest results shift enough
+  (or you add/remove tickers from `TICKERS`) to change the ranking, the
+  quick-picks table, the comparison chart, and every "★ TOP N" badge all
+  follow automatically on the next run. There's still no *automatic*
+  discovery of new candidate tickers from the broader market (`TICKERS`
+  is edited by hand) — only the ranking *among* whatever's in `TICKERS` is
+  dynamic.
+- Runtime scales roughly linearly with ticker count: ~50s for 17 tickers
+  vs. ~18s for 4, still comfortably interactive.
+
 ### 4. Multi-event backtest + orchestration — `src/analysis_engine.py`
 
 The original version scored each ticker off a single historical ex-dividend

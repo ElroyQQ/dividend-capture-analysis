@@ -62,7 +62,21 @@ TICKERS = {
     "O": "hold — monthly-paying REIT (Realty Income)",
     "AGNC": "hold — monthly-paying mortgage REIT",
     "STAG": "hold — monthly-paying industrial REIT",
+    "XOM": "trade_exit — energy major, quarterly dividend",
+    "CVX": "trade_exit — energy major, quarterly dividend",
+    "VZ": "hold — telecom, quarterly dividend",
+    "T": "hold — telecom, quarterly dividend",
+    "KO": "hold — consumer staples, quarterly dividend",
+    "PG": "hold — consumer staples, quarterly dividend",
+    "JNJ": "hold — healthcare, quarterly dividend",
+    "DUK": "hold — utility, quarterly dividend",
+    "SO": "hold — utility, quarterly dividend",
+    "MAIN": "hold — monthly-paying BDC (Main Street Capital)",
+    "SPG": "hold — retail REIT (Simon Property Group), quarterly dividend",
+    "MMM": "hold — industrials, quarterly dividend",
+    "JPM": "hold — financials, quarterly dividend",
 }
+TOP_N = 5  # how many tickers count as "top" for highlighting/the comparison chart
 
 MODEL_SPECS = {
     "conservative": dict(dist="t"),                       # heavy-tailed, full history
@@ -312,11 +326,14 @@ def plot_paths(ticker: str, history: pd.DataFrame, ex_idx: int, result: dict) ->
     plt.close(fig)
 
 
-# First 4 slots of the dataviz reference categorical palette (light-mode hexes;
-# this chart is a static PNG, always rendered on a white matplotlib background
-# regardless of the interface page's own light/dark theme), in the fixed order
-# the palette validates for CVD-safety on adjacent pairs.
-COMPARISON_COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100"]  # blue, orange, aqua, yellow
+# Dataviz reference categorical palette (light-mode hexes; this chart is a
+# static PNG, always rendered on a white matplotlib background regardless of
+# the interface page's own light/dark theme), in the fixed order the palette
+# validates for CVD-safety on adjacent pairs — safe for a line chart (unlike
+# scatter/bubble forms, lines only need the adjacent-pair guarantee, not
+# all-pairs). blue, orange, aqua, yellow, magenta, green, violet, red.
+COMPARISON_COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100",
+                      "#e87ba4", "#008300", "#4a3aa7", "#e34948"]
 
 
 def plot_comparison_chart(results: list[dict]) -> None:
@@ -421,13 +438,15 @@ def write_report(df: pd.DataFrame, suitability: dict[str, dict]) -> None:
              f"× up to {MAX_BACKTEST_EVENTS} historical events per ticker for the backtest "
              "aggregate), with antithetic variance reduction and an ex-dividend calendar-drift "
              "adjustment. See docs/system_architecture.md for the full methodology.", "",
-             "## Quick picks", "",
+             f"## Top {TOP_N} quick picks", "",
              "| Ticker | Best for | Why |", "|---|---|---|"] + [
                  f"| {t} | {suitability[t]['suitability']} | {suitability[t]['suitabilityReason']} |"
-                 for t in df["ticker"]
+                 for t in df["ticker"].iloc[:TOP_N]
              ] + ["",
-             "## Ranking (highest risk-reward score first)", "",
-             df.to_markdown(index=False), "",
+             f"## Full ranking (all {len(df)} analyzed, highest risk-reward score first — "
+             f"top {TOP_N} marked ★)", "",
+             df.assign(ticker=[f"★ {t}" if i < TOP_N else t for i, t in enumerate(df["ticker"])])
+               .to_markdown(index=False), "",
              "## Notes", "",
              "- `n_backtest_events` / `hit_rate_pct`: how many historical ex-dividend events "
              "(capped, most recent first) were actually run through the entry/exit search, and "
@@ -480,6 +499,7 @@ def build_interface_records(results: list[dict], df: pd.DataFrame,
             }
         records.append({
             "rank": int(rank_idx) + 1,
+            "isTopN": int(rank_idx) < TOP_N,
             "ticker": r["ticker"],
             "category": TICKERS[r["ticker"]],
             "trailingYieldPct": round(r["trailing_yield"] * 100, 2),
@@ -503,6 +523,7 @@ def write_interface(records: list[dict]) -> None:
     html = template.replace("__STOCK_DATA__", json.dumps(records, indent=2))
     html = html.replace("__GENERATED_AT__", pd.Timestamp.now().strftime("%Y-%m-%d %H:%M"))
     html = html.replace("__POST_WINDOW__", str(POST_WINDOW))
+    html = html.replace("__TOP_N__", str(TOP_N))
     (interface_dir / "index.html").write_text(html)
 
 
@@ -511,9 +532,10 @@ def main() -> None:
     for ticker in TICKERS:
         print(f"Analyzing {ticker}...")
         results.append(analyze_ticker(ticker))
-    plot_comparison_chart(results)
-    df = rank(results)
+    df = rank(results)  # rank first — the comparison chart needs to know who's in the top N
     df.to_csv(OUTPUT / "ranking.csv", index=False)
+    top_tickers = set(df["ticker"].iloc[:TOP_N])
+    plot_comparison_chart([r for r in results if r["ticker"] in top_tickers])
     suitability = classify_suitability(df)
     write_report(df, suitability)
     records = build_interface_records(results, df, suitability)

@@ -72,6 +72,16 @@ honest assessment of where the model does and doesn't work.
   15/40-day entry/exit window without re-checking for the
   neighboring-event contamination described in
   `docs/system_architecture.md` §3 and `AI_Performance_Report.md`.
+- **`TICKERS` is a 17-symbol diversified universe, not just the original 4**
+  (session 8). `TOP_N` (5) controls how many count as "top" — ranked
+  dynamically by `risk_reward_score` every run, not a fixed list. If asked
+  to add/remove candidate tickers, edit `TICKERS`; don't hardcode a "top 5"
+  anywhere, since the whole point is that it's computed fresh each run.
+- **The comparison chart is deliberately limited to the top `TOP_N`
+  tickers**, not all of `TICKERS` — `main()` ranks first specifically so
+  `plot_comparison_chart()` knows who that is. Don't revert to plotting
+  every ticker on it; with the current 17-symbol universe that's unreadable,
+  and it defeats the "compare the current leaders" purpose.
 - **The interface auto-reloads every 60s (`location.reload()`), which is
   purely a page refresh, not a live data feed** (session 7). Don't let the
   auto-refresh indicator's presence imply the page fetches anything itself
@@ -100,10 +110,13 @@ and `interface/index.html` (a generated, self-contained dashboard — see
 below).
 
 To change the ticker set, edit the `TICKERS` dict at the top of
-`src/analysis_engine.py`. Full run (4 tickers, both models, headline +
-up to 50-event backtest each) takes well under 20 seconds on this
-machine — EGARCH fits and vectorized Monte Carlo are both cheap; if it's
-ever slow, suspect a `yfinance` network stall, not the modeling code.
+`src/analysis_engine.py` (17 tickers as of session 8; see `TOP_N` right
+below it for how many count as "top"). Full run (17 tickers, both models,
+headline + up to 50-event backtest each) takes ~50 seconds on this
+machine — EGARCH fits and vectorized Monte Carlo are both cheap and
+runtime scales roughly linearly with ticker count; if it's meaningfully
+slower than that, suspect a `yfinance` network stall, not the modeling
+code.
 
 Dependencies (`requirements.txt`) include `arch` for GARCH modeling —
 installing it pulls in `scipy`/`statsmodels`, which on a slow connection
@@ -138,7 +151,7 @@ dividend-capture-analysis/
 ├── .venv/                       # local virtualenv (not committed)
 ├── .git/                        # this project's own repo — github.com/ElroyQQ/dividend-capture-analysis
 ├── logs/
-│   └── session_0N.md            # what happened in each build session (currently 01–07)
+│   └── session_0N.md            # what happened in each build session (currently 01–08)
 ├── docs/
 │   └── system_architecture.md   # pipeline + methodology detail
 ├── src/
